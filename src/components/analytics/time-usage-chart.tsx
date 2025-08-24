@@ -1,16 +1,34 @@
+"use client";
 
-'use client';
-
-import { useState, useEffect } from 'react';
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
-import { ChartConfig, ChartContainer, ChartTooltipContent } from "@/components/ui/chart"
-import { handleAnalyzeTimeUsage } from '@/lib/actions';
-import { getTasksFromLocalStorage } from '@/lib/task-storage';
-import type { Task } from '@/types';
-import { format, parseISO } from 'date-fns';
-import { IconSpinner } from '@/components/icons';
-import type { AnalyzeTimeUsageOutput } from '@/ai/flows/analyze-time-usage';
+import { useState, useEffect } from "react";
+import {
+  BarChart,
+  Bar,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  Legend,
+  ResponsiveContainer,
+} from "recharts";
+import {
+  Card,
+  CardContent,
+  CardHeader,
+  CardTitle,
+  CardDescription,
+} from "@/components/ui/card";
+import {
+  ChartConfig,
+  ChartContainer,
+  ChartTooltipContent,
+} from "@/components/ui/chart";
+import { handleAnalyzeTimeUsage } from "@/lib/actions";
+import { getTasksFromLocalStorage } from "@/lib/task-storage";
+import type { Task } from "@/types";
+import { format, parseISO } from "date-fns";
+import { IconSpinner } from "@/components/icons";
+import type { AnalyzeTimeUsageOutput } from "@/ai/flows/analyze-time-usage";
 
 const chartConfig = {
   hours: {
@@ -24,7 +42,8 @@ const chartConfig = {
     label: "Work",
     color: "hsl(var(--chart-2))",
   },
-  Personal: { // Added Personal, as it's more derivable from tasks
+  Personal: {
+    // Added Personal, as it's more derivable from tasks
     label: "Personal",
     color: "hsl(var(--chart-5))",
   },
@@ -36,10 +55,10 @@ const chartConfig = {
     label: "Sleep (Est.)", // Indicate estimation
     color: "hsl(var(--chart-4))",
   },
-} satisfies ChartConfig
+} satisfies ChartConfig;
 
 type ChartData = Array<{
-  day: 'Mon' | 'Tue' | 'Wed' | 'Thu' | 'Fri' | 'Sat' | 'Sun';
+  day: "Mon" | "Tue" | "Wed" | "Thu" | "Fri" | "Sat" | "Sun";
   Study?: number;
   Work?: number;
   Personal?: number;
@@ -56,20 +75,35 @@ export function TimeUsageChart() {
     async function fetchData() {
       setIsLoading(true);
       const tasks = getTasksFromLocalStorage();
-      const currentDate = format(new Date(), 'yyyy-MM-dd');
+      const currentDate = format(new Date(), "yyyy-MM-dd");
 
       if (tasks.length === 0) {
-        const defaultData = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'].map(day => ({
-          day: day as any, Study: 0, Work: 0, Personal: 0, Chill: 1, Sleep: 7
+        const defaultData = [
+          "Mon",
+          "Tue",
+          "Wed",
+          "Thu",
+          "Fri",
+          "Sat",
+          "Sun",
+        ].map((day) => ({
+          day: day as any,
+          Study: 0,
+          Work: 0,
+          Personal: 0,
+          Chill: 1,
+          Sleep: 7,
         }));
         setChartData(defaultData);
-        setAnalysisSummary("No tasks available for analysis. Showing default estimates for Chill & Sleep.");
+        setAnalysisSummary(
+          "No tasks available for analysis. Showing default estimates for Chill & Sleep."
+        );
         setIsLoading(false);
         return;
       }
-      
+
       try {
-        const aiTasks = tasks.map(task => ({
+        const aiTasks = tasks.map((task) => ({
           name: task.name,
           description: task.description,
           dueDate: task.dueDate,
@@ -78,17 +112,37 @@ export function TimeUsageChart() {
           category: task.category,
         }));
 
-        const result: AnalyzeTimeUsageOutput = await handleAnalyzeTimeUsage({ tasks: aiTasks, currentDate });
+        const result: AnalyzeTimeUsageOutput = await handleAnalyzeTimeUsage({
+          tasks: aiTasks,
+          currentDate,
+        });
         setChartData(result.weeklyUsage);
-        setAnalysisSummary(result.analysisSummary || "Weekly time usage estimated by AI.");
+        setAnalysisSummary(
+          result.analysisSummary || "Weekly time usage estimated by AI."
+        );
       } catch (error) {
         console.error("Error fetching time usage analysis:", error);
         // Fallback to mock data structure on error
-        const fallbackData = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'].map(d => ({
-            day: d as any, Study: 0, Work: 0, Personal: 0, Chill: 1, Sleep: 7
+        const fallbackData = [
+          "Mon",
+          "Tue",
+          "Wed",
+          "Thu",
+          "Fri",
+          "Sat",
+          "Sun",
+        ].map((d) => ({
+          day: d as any,
+          Study: 0,
+          Work: 0,
+          Personal: 0,
+          Chill: 1,
+          Sleep: 7,
         }));
         setChartData(fallbackData);
-        setAnalysisSummary("Could not analyze time usage. Displaying default estimates.");
+        setAnalysisSummary(
+          "Could not analyze time usage. Displaying default estimates."
+        );
       } finally {
         setIsLoading(false);
       }
@@ -97,11 +151,14 @@ export function TimeUsageChart() {
   }, []);
 
   return (
-    <Card className="shadow-lg h-full flex flex-col">
+    <Card className="h-full flex flex-col">
       <CardHeader>
         <CardTitle>AI-Estimated Weekly Time Usage</CardTitle>
         <CardDescription>
-          {isLoading ? "AI is analyzing your time usage..." : (analysisSummary || "How your time might be spent across activities (in hours).")}
+          {isLoading
+            ? "AI is analyzing your time usage..."
+            : analysisSummary ||
+              "How your time might be spent across activities (in hours)."}
         </CardDescription>
       </CardHeader>
       <CardContent className="flex-1 pb-0 flex items-center justify-center">
@@ -110,29 +167,76 @@ export function TimeUsageChart() {
         ) : chartData.length > 0 ? (
           <ChartContainer config={chartConfig} className="h-[300px] w-full">
             <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={chartData} margin={{ top: 5, right: 0, left: -20, bottom: 5 }}>
-                <CartesianGrid strokeDasharray="3 3" vertical={false} />
-                <XAxis dataKey="day" tickLine={false} axisLine={false} tickMargin={8} />
+              <BarChart
+                data={chartData}
+                margin={{ top: 5, right: 0, left: -20, bottom: 5 }}
+              >
+                <defs>
+                  <linearGradient id="barGlowCyan" x1="0" y1="0" x2="0" y2="1">
+                    <stop
+                      offset="0%"
+                      stopColor="hsl(var(--chart-1))"
+                      stopOpacity="0.95"
+                    />
+                    <stop
+                      offset="100%"
+                      stopColor="hsl(var(--chart-1))"
+                      stopOpacity="0.6"
+                    />
+                  </linearGradient>
+                </defs>
+                <CartesianGrid strokeDasharray="2 6" vertical={false} />
+                <XAxis
+                  dataKey="day"
+                  tickLine={false}
+                  axisLine={false}
+                  tickMargin={8}
+                />
                 <YAxis tickLine={false} axisLine={false} tickMargin={8} />
-                <Tooltip 
+                <Tooltip
                   cursor={false}
-                  content={<ChartTooltipContent indicator="dot" />} 
+                  content={<ChartTooltipContent indicator="dot" />}
                 />
                 <Legend />
-                <Bar dataKey="Study" stackId="a" radius={[4, 4, 0, 0]} fill={chartConfig.Study.color}/>
-                <Bar dataKey="Work" stackId="a" radius={[4, 4, 0, 0]} fill={chartConfig.Work.color} />
-                <Bar dataKey="Personal" stackId="a" radius={[4, 4, 0, 0]} fill={chartConfig.Personal.color} />
-                <Bar dataKey="Chill" stackId="a" radius={[4, 4, 0, 0]} fill={chartConfig.Chill.color} />
-                <Bar dataKey="Sleep" stackId="a" radius={[4, 4, 0, 0]} fill={chartConfig.Sleep.color} />
+                <Bar
+                  dataKey="Study"
+                  stackId="a"
+                  radius={[6, 6, 0, 0]}
+                  fill="url(#barGlowCyan)"
+                />
+                <Bar
+                  dataKey="Work"
+                  stackId="a"
+                  radius={[6, 6, 0, 0]}
+                  fill={chartConfig.Work.color}
+                />
+                <Bar
+                  dataKey="Personal"
+                  stackId="a"
+                  radius={[6, 6, 0, 0]}
+                  fill={chartConfig.Personal.color}
+                />
+                <Bar
+                  dataKey="Chill"
+                  stackId="a"
+                  radius={[6, 6, 0, 0]}
+                  fill={chartConfig.Chill.color}
+                />
+                <Bar
+                  dataKey="Sleep"
+                  stackId="a"
+                  radius={[6, 6, 0, 0]}
+                  fill={chartConfig.Sleep.color}
+                />
               </BarChart>
             </ResponsiveContainer>
           </ChartContainer>
         ) : (
-          <p className="text-muted-foreground">No data to display for time usage.</p>
+          <p className="text-muted-foreground">
+            No data to display for time usage.
+          </p>
         )}
       </CardContent>
     </Card>
   );
 }
-
-    

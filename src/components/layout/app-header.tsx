@@ -38,7 +38,7 @@ export function AppHeader() {
   };
 
   return (
-    <header className="sticky top-0 z-50 w-full border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
+    <header className="sticky top-0 z-50 w-full border-b border-white/5 bg-background/40 backdrop-blur-xl supports-[backdrop-filter]:bg-background/30">
       <div className="container flex h-16 items-center">
         <div className="mr-4 hidden md:flex">
           <Link href="/dashboard" className="mr-6 flex items-center space-x-2">
@@ -54,7 +54,7 @@ export function AppHeader() {
               <DropdownMenuTrigger asChild>
                 <Button
                   variant="ghost"
-                  className="relative h-9 w-9 rounded-full"
+                  className="relative h-9 w-9 rounded-full shadow-[0_0_0_1px_hsl(var(--ring)/0.2)] hover:shadow-[0_0_0_1px_hsl(var(--ring)/0.35),0_0_24px_hsl(var(--ring)/0.25)]"
                 >
                   <Avatar className="h-9 w-9">
                     {user.photoURL ? (
@@ -74,6 +74,8 @@ export function AppHeader() {
                       {getInitials(user.displayName, user.email)}
                     </AvatarFallback>
                   </Avatar>
+                  {/* glowing status */}
+                  <span className="absolute -bottom-0.5 -right-0.5 h-3 w-3 rounded-full bg-emerald-400 shadow-[0_0_10px_rgba(16,185,129,0.9)]" />
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent className="w-56" align="end" forceMount>

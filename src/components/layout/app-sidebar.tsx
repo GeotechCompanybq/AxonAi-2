@@ -20,8 +20,8 @@ export function AppSidebar() {
     <Sidebar
       collapsible="icon"
       side="left"
-      variant="sidebar"
-      className="border-r"
+      variant="floating"
+      className="border-sidebar-border/40 bg-[linear-gradient(180deg,rgba(255,255,255,0.06),rgba(255,255,255,0.02))] shadow-[0_20px_80px_rgba(0,0,0,0.4)]"
     >
       <SidebarHeader className="p-4 md:p-2 items-center md:bg-transparent">
         <Link

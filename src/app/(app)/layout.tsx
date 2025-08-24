@@ -1,25 +1,22 @@
+"use client";
 
-'use client';
+import { useEffect } from "react";
+import { useRouter } from "next/navigation";
+import { useAuth } from "@/hooks/use-auth";
+import { AppHeader } from "@/components/layout/app-header";
+import { AppSidebar } from "@/components/layout/app-sidebar";
+import { SidebarProvider, SidebarInset } from "@/components/ui/sidebar";
+import { IconSpinner } from "@/components/icons";
+import { MobileTabBar } from "@/components/layout/mobile-tabbar";
+import { AIActionButton } from "@/components/layout/ai-action-button";
 
-import { useEffect } from 'react';
-import { useRouter } from 'next/navigation';
-import { useAuth } from '@/hooks/use-auth';
-import { AppHeader } from '@/components/layout/app-header';
-import { AppSidebar } from '@/components/layout/app-sidebar';
-import { SidebarProvider, SidebarInset } from '@/components/ui/sidebar';
-import { IconSpinner } from '@/components/icons';
-
-export default function AppLayout({
-  children,
-}: {
-  children: React.ReactNode;
-}) {
+export default function AppLayout({ children }: { children: React.ReactNode }) {
   const { user, isLoading } = useAuth();
   const router = useRouter();
 
   useEffect(() => {
     if (!isLoading && !user) {
-      router.replace('/login');
+      router.replace("/login");
     }
   }, [user, isLoading, router]);
 
@@ -36,11 +33,12 @@ export default function AppLayout({
   return (
     <SidebarProvider defaultOpen={true}>
       <AppSidebar />
-      <SidebarInset className="flex flex-col min-h-screen">
+      <SidebarInset className="flex flex-col min-h-screen ai-grid-bg">
         <AppHeader />
-        <main className="flex-1 p-4 md:p-8 overflow-auto">
-          {children}
-        </main>
+        <main className="flex-1 p-4 md:p-8 overflow-auto">{children}</main>
+        {/* Mobile-only nav and AI action */}
+        <AIActionButton />
+        <MobileTabBar />
       </SidebarInset>
     </SidebarProvider>
   );

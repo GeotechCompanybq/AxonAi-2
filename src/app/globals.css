@@ -1,93 +1,114 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
-
 body {
-  font-family: var(--font-geist-sans), Arial, Helvetica, sans-serif;
+    font-family: var(--font-space-grotesk), system-ui, -apple-system, Segoe UI, Roboto, Arial, Helvetica, sans-serif;
 }
 
 @layer base {
-  :root {
-    --background: 48 20% 90%; /* #E8E6D8 Desaturated Gold */
-    --foreground: 48 10% 20%; /* #3A3831 Darker shade for text */
-    --card: 48 20% 95%; /* #F0EFEA Slightly lighter than background */
-    --card-foreground: 48 10% 20%;
-    --popover: 48 20% 95%;
-    --popover-foreground: 48 10% 20%;
-    --primary: 48 85% 50%; /* #F0C200 Vivid Gold */
-    --primary-foreground: 48 85% 10%; /* #302600 Dark text on primary */
-    --secondary: 48 30% 80%; /* #D7D3BF */
-    --secondary-foreground: 48 10% 20%;
-    --muted: 48 20% 85%; /* #E0DDCB */
-    --muted-foreground: 48 10% 45%; /* #7E7A6B */
-    --accent: 18 75% 55%; /* #F28500 Orange */
-    --accent-foreground: 0 0% 100%; /* #FFFFFF White text on accent */
-    --destructive: 0 84.2% 60.2%;
-    --destructive-foreground: 0 0% 98%;
-    --border: 48 20% 80%; /* #D1CEBE */
-    --input: 48 20% 85%; /* #E0DDCB */
-    --ring: 48 85% 50%; /* #F0C200 For focus rings */
-    --chart-1: 48 85% 50%; /* primary */
-    --chart-2: 18 75% 55%; /* accent */
-    --chart-3: 48 50% 60%; /* lighter gold */
-    --chart-4: 25 60% 65%; /* lighter orange */
-    --chart-5: 48 20% 70%; /* muted gold */
-    --radius: 0.5rem;
-
-    /* Sidebar specific colors */
-    --sidebar-background: 48 20% 88%; /* #E3E1D1 */
-    --sidebar-foreground: 48 10% 25%; /* #47453C */
-    --sidebar-primary: 48 85% 50%; /* #F0C200 */
-    --sidebar-primary-foreground: 48 85% 10%; /* #302600 */
-    --sidebar-accent: 18 75% 55%; /* #F28500 */
-    --sidebar-accent-foreground: 0 0% 100%;
-    --sidebar-border: 48 20% 75%; /* #C9C6B6 */
-    --sidebar-ring: 48 85% 50%;
-  }
-
-  .dark {
-    /* Dark theme adaptation of Dey Weaver colors */
-    --background: 48 10% 10%; /* Dark Gold/Brown */
-    --foreground: 48 20% 90%; /* Light Desaturated Gold */
-    --card: 48 10% 15%; 
-    --card-foreground: 48 20% 90%;
-    --popover: 48 10% 15%;
-    --popover-foreground: 48 20% 90%;
-    --primary: 48 85% 50%; /* Vivid Gold - remains bright */
-    --primary-foreground: 48 85% 10%; /* Dark text on primary */
-    --secondary: 48 15% 25%;
-    --secondary-foreground: 48 20% 90%;
-    --muted: 48 15% 20%;
-    --muted-foreground: 48 20% 60%;
-    --accent: 18 75% 55%; /* Orange - remains bright */
-    --accent-foreground: 0 0% 100%;
-    --destructive: 0 70% 50%;
-    --destructive-foreground: 0 0% 98%;
-    --border: 48 10% 25%;
-    --input: 48 10% 20%;
-    --ring: 48 85% 50%; 
-    --chart-1: 48 85% 50%;
-    --chart-2: 18 75% 55%;
-    --chart-3: 48 50% 70%;
-    --chart-4: 25 60% 75%;
-    --chart-5: 48 20% 60%;
-
-    --sidebar-background: 48 10% 12%;
-    --sidebar-foreground: 48 20% 85%;
-    --sidebar-primary: 48 85% 50%;
-    --sidebar-primary-foreground: 48 85% 10%;
-    --sidebar-accent: 18 75% 55%;
-    --sidebar-accent-foreground: 0 0% 100%;
-    --sidebar-border: 48 10% 20%;
-    --sidebar-ring: 48 85% 50%;
-  }
+     :root {
+        /* Light theme (kept minimal; app defaults to .dark) */
+        --background: 220 40% 98%;
+        --foreground: 220 30% 12%;
+        --card: 220 40% 100%;
+        --card-foreground: 220 30% 12%;
+        --popover: 220 40% 100%;
+        --popover-foreground: 220 30% 12%;
+        --primary: 190 100% 40%;
+        /* neon cyan */
+        --primary-foreground: 210 40% 10%;
+        --secondary: 225 30% 92%;
+        --secondary-foreground: 220 30% 20%;
+        --muted: 220 20% 92%;
+        --muted-foreground: 220 15% 40%;
+        --accent: 270 100% 64%;
+        /* violet */
+        --accent-foreground: 0 0% 100%;
+        --destructive: 0 84% 60%;
+        --destructive-foreground: 0 0% 98%;
+        --border: 220 20% 88%;
+        --input: 220 20% 90%;
+        --ring: 190 100% 50%;
+        --chart-1: 190 100% 50%;
+        /* cyan */
+        --chart-2: 270 100% 70%;
+        /* violet */
+        --chart-3: 305 100% 68%;
+        /* magenta */
+        --chart-4: 216 100% 60%;
+        /* electric blue */
+        --chart-5: 170 80% 50%;
+        /* teal */
+        --radius: 1rem;
+        /* Sidebar specific colors */
+        --sidebar-background: 220 40% 98%;
+        --sidebar-foreground: 220 30% 20%;
+        --sidebar-primary: 190 100% 40%;
+        --sidebar-primary-foreground: 210 40% 10%;
+        --sidebar-accent: 270 100% 64%;
+        --sidebar-accent-foreground: 0 0% 100%;
+        --sidebar-border: 220 20% 86%;
+        --sidebar-ring: 190 100% 50%;
+    }
+    .dark {
+        /* Deep space blue + neon accents */
+        --background: 222 60% 6%;
+        /* #050d25 */
+        --foreground: 210 40% 96%;
+        --card: 222 55% 10%;
+        --card-foreground: 210 40% 96%;
+        --popover: 222 55% 10%;
+        --popover-foreground: 210 40% 96%;
+        --primary: 190 100% 50%;
+        /* neon cyan */
+        --primary-foreground: 210 40% 10%;
+        --secondary: 222 40% 16%;
+        --secondary-foreground: 210 40% 92%;
+        --muted: 222 30% 18%;
+        --muted-foreground: 215 20% 70%;
+        --accent: 270 100% 64%;
+        /* violet */
+        --accent-foreground: 0 0% 100%;
+        --destructive: 0 70% 50%;
+        --destructive-foreground: 0 0% 98%;
+        --border: 220 35% 22%;
+        --input: 222 35% 18%;
+        --ring: 190 100% 50%;
+        --chart-1: 190 100% 55%;
+        --chart-2: 270 100% 72%;
+        --chart-3: 305 100% 70%;
+        --chart-4: 216 100% 62%;
+        --chart-5: 170 80% 52%;
+        --sidebar-background: 222 55% 12%;
+        --sidebar-foreground: 210 40% 94%;
+        --sidebar-primary: 190 100% 50%;
+        --sidebar-primary-foreground: 222 70% 8%;
+        --sidebar-accent: 270 100% 64%;
+        --sidebar-accent-foreground: 0 0% 100%;
+        --sidebar-border: 220 35% 22%;
+        --sidebar-ring: 190 100% 50%;
+    }
 }
 
 @layer base {
-  * {
-    @apply border-border;
-  }
-  body {
-    @apply bg-background text-foreground;
-  }
+    * {
+        @apply border-border;
+    }
+    body {
+        @apply bg-background text-foreground;
+    }
+}
+
+
+/* AI-inspired subtle grid background helper */
+
+.ai-grid-bg {
+    background-image: radial-gradient( 1200px 600px at 10% -10%, rgba(0, 217, 255, 0.12), transparent 60%), radial-gradient( 800px 400px at 110% 10%, rgba(178, 0, 255, 0.1), transparent 60%), radial-gradient( 600px 300px at 50% 120%, rgba(255, 0, 180, 0.08), transparent 60%), linear-gradient(rgba(255, 255, 255, 0.02), rgba(255, 255, 255, 0.02)), repeating-linear-gradient( 0deg, rgba(0, 255, 255, 0.06), rgba(0, 255, 255, 0.06) 1px, transparent 1px, transparent 24px), repeating-linear-gradient( 90deg, rgba(138, 43, 226, 0.05), rgba(138, 43, 226, 0.05) 1px, transparent 1px, transparent 24px);
+}
+
+
+/* Neon focus ring */
+
+.ring-neon {
+    box-shadow: 0 0 0 2px hsl(var(--ring) / 0.8), 0 0 24px hsl(var(--ring) / 0.35);
 }
