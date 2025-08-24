@@ -35,7 +35,15 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
       <AppSidebar />
       <SidebarInset className="flex flex-col min-h-screen ai-grid-bg">
         <AppHeader />
-        <main className="flex-1 p-4 md:p-8 overflow-auto">{children}</main>
+        <main
+          className="flex-1 p-4 md:p-8 overflow-auto pb-28 md:pb-8"
+          style={{
+            paddingBottom:
+              "max(128px, calc(env(safe-area-inset-bottom) + 104px))",
+          }}
+        >
+          {children}
+        </main>
         {/* Mobile-only nav and AI action */}
         <AIActionButton />
         <MobileTabBar />
