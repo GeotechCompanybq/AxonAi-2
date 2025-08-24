@@ -9,6 +9,7 @@ import { SidebarProvider, SidebarInset } from "@/components/ui/sidebar";
 import { IconSpinner } from "@/components/icons";
 import { MobileTabBar } from "@/components/layout/mobile-tabbar";
 import { AIActionButton } from "@/components/layout/ai-action-button";
+import { FloatingChatBot } from "@/components/chat/floating-chatbot";
 
 export default function AppLayout({ children }: { children: React.ReactNode }) {
   const { user, isLoading } = useAuth();
@@ -47,6 +48,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
         {/* Mobile-only nav and AI action */}
         <AIActionButton />
         <MobileTabBar />
+        <FloatingChatBot />
       </SidebarInset>
     </SidebarProvider>
   );
