@@ -1,25 +1,40 @@
+"use client";
 
-'use client';
-
-import { useState, useEffect } from 'react';
-import { useForm } from 'react-hook-form';
-import { zodResolver } from '@hookform/resolvers/zod';
-import * as z from 'zod';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
-import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
-import { useToast } from '@/hooks/use-toast';
-import { useAuth } from '@/hooks/use-auth';
-import { IconSpinner } from '@/components/icons';
-import { useRouter } from 'next/navigation';
-import Link from 'next/link';
-import { Separator } from '@/components/ui/separator';
-import { Github, Chrome } from 'lucide-react'; // Using Chrome for Google icon
+import { useState, useEffect } from "react";
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import * as z from "zod";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardFooter,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+import {
+  Form,
+  FormControl,
+  FormField,
+  FormItem,
+  FormLabel,
+  FormMessage,
+} from "@/components/ui/form";
+import { useToast } from "@/hooks/use-toast";
+import { useAuth } from "@/hooks/use-auth";
+import { IconSpinner } from "@/components/icons";
+import { useRouter } from "next/navigation";
+import Link from "next/link";
+import { Separator } from "@/components/ui/separator";
+import { Github, Chrome } from "lucide-react"; // Using Chrome for Google icon
 
 const formSchema = z.object({
-  email: z.string().email({ message: 'Please enter a valid email address.' }),
-  password: z.string().min(6, { message: 'Password must be at least 6 characters.' }),
+  email: z.string().email({ message: "Please enter a valid email address." }),
+  password: z
+    .string()
+    .min(6, { message: "Password must be at least 6 characters." }),
 });
 
 export default function LoginPage() {
@@ -27,20 +42,26 @@ export default function LoginPage() {
   const [isSubmittingGoogle, setIsSubmittingGoogle] = useState(false);
   const [isSubmittingGitHub, setIsSubmittingGitHub] = useState(false);
   const { toast } = useToast();
-  const { loginWithEmail, signInWithGoogle, signInWithGitHub, user, isLoading: authIsLoading } = useAuth();
+  const {
+    loginWithEmail,
+    signInWithGoogle,
+    signInWithGitHub,
+    user,
+    isLoading: authIsLoading,
+  } = useAuth();
   const router = useRouter();
 
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
     defaultValues: {
-      email: '',
-      password: '',
+      email: "",
+      password: "",
     },
   });
 
   useEffect(() => {
     if (!authIsLoading && user) {
-      router.replace('/dashboard');
+      router.replace("/dashboard");
     }
   }, [user, authIsLoading, router]);
 
@@ -49,15 +70,16 @@ export default function LoginPage() {
     try {
       await loginWithEmail(values.email, values.password);
       toast({
-        title: 'Login Successful!',
-        description: 'Welcome back!',
+        title: "Login Successful!",
+        description: "Welcome back!",
       });
       // Redirect is handled by AuthProvider or useEffect
     } catch (error) {
       toast({
-        variant: 'destructive',
-        title: 'Login Failed',
-        description: error instanceof Error ? error.message : 'An unknown error occurred.',
+        variant: "destructive",
+        title: "Login Failed",
+        description:
+          error instanceof Error ? error.message : "An unknown error occurred.",
       });
     } finally {
       setIsSubmittingEmail(false);
@@ -69,14 +91,15 @@ export default function LoginPage() {
     try {
       await signInWithGoogle();
       toast({
-        title: 'Google Sign-In Successful!',
-        description: 'Welcome!',
+        title: "Google Sign-In Successful!",
+        description: "Welcome!",
       });
     } catch (error) {
       toast({
-        variant: 'destructive',
-        title: 'Google Sign-In Failed',
-        description: error instanceof Error ? error.message : 'An unknown error occurred.',
+        variant: "destructive",
+        title: "Google Sign-In Failed",
+        description:
+          error instanceof Error ? error.message : "An unknown error occurred.",
       });
     } finally {
       setIsSubmittingGoogle(false);
@@ -88,20 +111,21 @@ export default function LoginPage() {
     try {
       await signInWithGitHub();
       toast({
-        title: 'GitHub Sign-In Successful!',
-        description: 'Welcome!',
+        title: "GitHub Sign-In Successful!",
+        description: "Welcome!",
       });
     } catch (error) {
       toast({
-        variant: 'destructive',
-        title: 'GitHub Sign-In Failed',
-        description: error instanceof Error ? error.message : 'An unknown error occurred.',
+        variant: "destructive",
+        title: "GitHub Sign-In Failed",
+        description:
+          error instanceof Error ? error.message : "An unknown error occurred.",
       });
     } finally {
       setIsSubmittingGitHub(false);
     }
   }
-  
+
   if (authIsLoading || (!authIsLoading && user)) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-background">
@@ -110,15 +134,14 @@ export default function LoginPage() {
     );
   }
 
-  const isAnySubmitting = isSubmittingEmail || isSubmittingGoogle || isSubmittingGitHub;
+  const isAnySubmitting =
+    isSubmittingEmail || isSubmittingGoogle || isSubmittingGitHub;
 
   return (
     <Card className="w-full shadow-xl">
       <CardHeader className="text-center">
         <CardTitle className="text-2xl">Welcome Back!</CardTitle>
-        <CardDescription>
-          Log in to your Dey Weaver account.
-        </CardDescription>
+        <CardDescription>Log in to your Axon account.</CardDescription>
       </CardHeader>
       <Form {...form}>
         <form onSubmit={form.handleSubmit(onEmailSubmit)}>
@@ -163,17 +186,22 @@ export default function LoginPage() {
                 </FormItem>
               )}
             />
-            <Button type="submit" disabled={isAnySubmitting} size="lg" className="w-full">
+            <Button
+              type="submit"
+              disabled={isAnySubmitting}
+              size="lg"
+              className="w-full"
+            >
               {isSubmittingEmail ? (
                 <>
                   <IconSpinner className="mr-2 h-5 w-5" />
                   Logging In...
                 </>
               ) : (
-                'Log In with Email'
+                "Log In with Email"
               )}
             </Button>
-            
+
             <div className="relative my-4">
               <div className="absolute inset-0 flex items-center">
                 <span className="w-full border-t" />
@@ -186,20 +214,41 @@ export default function LoginPage() {
             </div>
 
             <div className="grid grid-cols-2 gap-4">
-              <Button variant="outline" type="button" onClick={handleGoogleSignIn} disabled={isAnySubmitting}>
-                {isSubmittingGoogle ? <IconSpinner className="mr-2 h-5 w-5" /> : <Chrome className="mr-2 h-5 w-5" />}
+              <Button
+                variant="outline"
+                type="button"
+                onClick={handleGoogleSignIn}
+                disabled={isAnySubmitting}
+              >
+                {isSubmittingGoogle ? (
+                  <IconSpinner className="mr-2 h-5 w-5" />
+                ) : (
+                  <Chrome className="mr-2 h-5 w-5" />
+                )}
                 Google
               </Button>
-              <Button variant="outline" type="button" onClick={handleGitHubSignIn} disabled={isAnySubmitting}>
-                {isSubmittingGitHub ? <IconSpinner className="mr-2 h-5 w-5" /> : <Github className="mr-2 h-5 w-5" />}
+              <Button
+                variant="outline"
+                type="button"
+                onClick={handleGitHubSignIn}
+                disabled={isAnySubmitting}
+              >
+                {isSubmittingGitHub ? (
+                  <IconSpinner className="mr-2 h-5 w-5" />
+                ) : (
+                  <Github className="mr-2 h-5 w-5" />
+                )}
                 GitHub
               </Button>
             </div>
           </CardContent>
           <CardFooter className="flex flex-col gap-4">
             <p className="text-sm text-muted-foreground">
-              Don&apos;t have an account?{' '}
-              <Link href="/signup" className="font-medium text-primary hover:underline">
+              Don&apos;t have an account?{" "}
+              <Link
+                href="/signup"
+                className="font-medium text-primary hover:underline"
+              >
                 Sign up
               </Link>
             </p>
