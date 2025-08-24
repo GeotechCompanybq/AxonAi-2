@@ -1,5 +1,11 @@
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { ThemeToggleSwitch } from '@/components/settings/theme-toggle-switch';
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+import { ThemeToggleSwitch } from "@/components/settings/theme-toggle-switch";
 
 export default function SettingsPage() {
   return (
@@ -8,7 +14,7 @@ export default function SettingsPage() {
         <CardHeader>
           <CardTitle className="text-3xl font-bold">Settings</CardTitle>
           <CardDescription className="text-lg">
-            Customize your Dey Weaver experience.
+            Customize your Axon experience.
           </CardDescription>
         </CardHeader>
       </Card>
