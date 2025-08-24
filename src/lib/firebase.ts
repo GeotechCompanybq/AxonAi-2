@@ -7,12 +7,13 @@ import { getAuth } from "firebase/auth";
 
 // Your web app's Firebase configuration
 const firebaseConfig = {
-  apiKey: "AIzaSyCCsx_KVzFONfVMcF-vXXKlHQlKzN7x2YM",
-  authDomain: "day-weaver-3aye8.firebaseapp.com",
-  projectId: "day-weaver-3aye8",
-  storageBucket: "day-weaver-3aye8.firebasestorage.app",
-  messagingSenderId: "227303256933",
-  appId: "1:227303256933:web:6414ae58136b88f11e678c"
+  apiKey: "AIzaSyCnqhnQH0KJcZzPtzPOgNEwL89cTts_Vjk",
+  authDomain: "axonai-2a6b6.firebaseapp.com",
+  databaseURL: "https://axonai-2a6b6-default-rtdb.firebaseio.com",
+  projectId: "axonai-2a6b6",
+  storageBucket: "axonai-2a6b6.firebasestorage.app",
+  messagingSenderId: "9310766469",
+  appId: "1:9310766469:web:6eae8b0730cbda3896b0ec",
 };
 
 // Initialize Firebase

@@ -1,50 +1,75 @@
+"use client";
 
-'use client';
+import { useState, useEffect } from "react";
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import * as z from "zod";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardFooter,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+import {
+  Form,
+  FormControl,
+  FormField,
+  FormItem,
+  FormLabel,
+  FormMessage,
+} from "@/components/ui/form";
+import { useToast } from "@/hooks/use-toast";
+import { useAuth } from "@/hooks/use-auth";
+import { IconSpinner } from "@/components/icons";
+import { useRouter } from "next/navigation";
+import Link from "next/link";
+import { Github, Chrome } from "lucide-react";
 
-import { useState, useEffect } from 'react';
-import { useForm } from 'react-hook-form';
-import { zodResolver } from '@hookform/resolvers/zod';
-import * as z from 'zod';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
-import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
-import { useToast } from '@/hooks/use-toast';
-import { useAuth } from '@/hooks/use-auth';
-import { IconSpinner } from '@/components/icons';
-import { useRouter } from 'next/navigation';
-import Link from 'next/link';
-import { Github, Chrome } from 'lucide-react';
-
-const formSchema = z.object({
-  email: z.string().email({ message: 'Please enter a valid email address.' }),
-  password: z.string().min(6, { message: 'Password must be at least 6 characters.' }),
-  confirmPassword: z.string().min(6, { message: 'Password must be at least 6 characters.' })
-}).refine(data => data.password === data.confirmPassword, {
-  message: "Passwords don't match",
-  path: ["confirmPassword"], // path of error
-});
+const formSchema = z
+  .object({
+    email: z.string().email({ message: "Please enter a valid email address." }),
+    password: z
+      .string()
+      .min(6, { message: "Password must be at least 6 characters." }),
+    confirmPassword: z
+      .string()
+      .min(6, { message: "Password must be at least 6 characters." }),
+  })
+  .refine((data) => data.password === data.confirmPassword, {
+    message: "Passwords don't match",
+    path: ["confirmPassword"], // path of error
+  });
 
 export default function SignupPage() {
   const [isSubmittingEmail, setIsSubmittingEmail] = useState(false);
   const [isSubmittingGoogle, setIsSubmittingGoogle] = useState(false);
   const [isSubmittingGitHub, setIsSubmittingGitHub] = useState(false);
   const { toast } = useToast();
-  const { signupWithEmail, signInWithGoogle, signInWithGitHub, user, isLoading: authIsLoading } = useAuth();
+  const {
+    signupWithEmail,
+    signInWithGoogle,
+    signInWithGitHub,
+    user,
+    isLoading: authIsLoading,
+  } = useAuth();
   const router = useRouter();
 
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
     defaultValues: {
-      email: '',
-      password: '',
-      confirmPassword: '',
+      email: "",
+      password: "",
+      confirmPassword: "",
     },
   });
 
   useEffect(() => {
     if (!authIsLoading && user) {
-      router.replace('/dashboard');
+      router.replace("/dashboard");
     }
   }, [user, authIsLoading, router]);
 
@@ -53,15 +78,16 @@ export default function SignupPage() {
     try {
       await signupWithEmail(values.email, values.password);
       toast({
-        title: 'Signup Successful!',
-        description: 'Welcome to Dey Weaver!',
+        title: "Signup Successful!",
+        description: "Welcome to Axon!",
       });
       // Redirect is handled by AuthProvider or useEffect
     } catch (error) {
       toast({
-        variant: 'destructive',
-        title: 'Signup Failed',
-        description: error instanceof Error ? error.message : 'An unknown error occurred.',
+        variant: "destructive",
+        title: "Signup Failed",
+        description:
+          error instanceof Error ? error.message : "An unknown error occurred.",
       });
     } finally {
       setIsSubmittingEmail(false);
@@ -73,14 +99,15 @@ export default function SignupPage() {
     try {
       await signInWithGoogle();
       toast({
-        title: 'Google Sign-Up Successful!',
-        description: 'Welcome!',
+        title: "Google Sign-Up Successful!",
+        description: "Welcome!",
       });
     } catch (error) {
       toast({
-        variant: 'destructive',
-        title: 'Google Sign-Up Failed',
-        description: error instanceof Error ? error.message : 'An unknown error occurred.',
+        variant: "destructive",
+        title: "Google Sign-Up Failed",
+        description:
+          error instanceof Error ? error.message : "An unknown error occurred.",
       });
     } finally {
       setIsSubmittingGoogle(false);
@@ -92,14 +119,15 @@ export default function SignupPage() {
     try {
       await signInWithGitHub();
       toast({
-        title: 'GitHub Sign-Up Successful!',
-        description: 'Welcome!',
+        title: "GitHub Sign-Up Successful!",
+        description: "Welcome!",
       });
     } catch (error) {
       toast({
-        variant: 'destructive',
-        title: 'GitHub Sign-Up Failed',
-        description: error instanceof Error ? error.message : 'An unknown error occurred.',
+        variant: "destructive",
+        title: "GitHub Sign-Up Failed",
+        description:
+          error instanceof Error ? error.message : "An unknown error occurred.",
       });
     } finally {
       setIsSubmittingGitHub(false);
@@ -113,15 +141,16 @@ export default function SignupPage() {
       </div>
     );
   }
-  
-  const isAnySubmitting = isSubmittingEmail || isSubmittingGoogle || isSubmittingGitHub;
+
+  const isAnySubmitting =
+    isSubmittingEmail || isSubmittingGoogle || isSubmittingGitHub;
 
   return (
     <Card className="w-full shadow-xl">
       <CardHeader className="text-center">
         <CardTitle className="text-2xl">Create an Account</CardTitle>
         <CardDescription>
-          Join Dey Weaver and start planning your days effectively.
+          Join Axon and start planning your days effectively.
         </CardDescription>
       </CardHeader>
       <Form {...form}>
@@ -172,7 +201,9 @@ export default function SignupPage() {
               name="confirmPassword"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel htmlFor="confirmPassword-signup">Confirm Password</FormLabel>
+                  <FormLabel htmlFor="confirmPassword-signup">
+                    Confirm Password
+                  </FormLabel>
                   <FormControl>
                     <Input
                       id="confirmPassword-signup"
@@ -187,17 +218,22 @@ export default function SignupPage() {
                 </FormItem>
               )}
             />
-             <Button type="submit" disabled={isAnySubmitting} size="lg" className="w-full">
+            <Button
+              type="submit"
+              disabled={isAnySubmitting}
+              size="lg"
+              className="w-full"
+            >
               {isSubmittingEmail ? (
                 <>
                   <IconSpinner className="mr-2 h-5 w-5" />
                   Signing Up...
                 </>
               ) : (
-                'Sign Up with Email'
+                "Sign Up with Email"
               )}
             </Button>
-            
+
             <div className="relative my-4">
               <div className="absolute inset-0 flex items-center">
                 <span className="w-full border-t" />
@@ -210,20 +246,41 @@ export default function SignupPage() {
             </div>
 
             <div className="grid grid-cols-2 gap-4">
-              <Button variant="outline" type="button" onClick={handleGoogleSignIn} disabled={isAnySubmitting}>
-                {isSubmittingGoogle ? <IconSpinner className="mr-2 h-5 w-5" /> : <Chrome className="mr-2 h-5 w-5" />}
+              <Button
+                variant="outline"
+                type="button"
+                onClick={handleGoogleSignIn}
+                disabled={isAnySubmitting}
+              >
+                {isSubmittingGoogle ? (
+                  <IconSpinner className="mr-2 h-5 w-5" />
+                ) : (
+                  <Chrome className="mr-2 h-5 w-5" />
+                )}
                 Google
               </Button>
-              <Button variant="outline" type="button" onClick={handleGitHubSignIn} disabled={isAnySubmitting}>
-                {isSubmittingGitHub ? <IconSpinner className="mr-2 h-5 w-5" /> : <Github className="mr-2 h-5 w-5" />}
+              <Button
+                variant="outline"
+                type="button"
+                onClick={handleGitHubSignIn}
+                disabled={isAnySubmitting}
+              >
+                {isSubmittingGitHub ? (
+                  <IconSpinner className="mr-2 h-5 w-5" />
+                ) : (
+                  <Github className="mr-2 h-5 w-5" />
+                )}
                 GitHub
               </Button>
             </div>
           </CardContent>
           <CardFooter className="flex flex-col gap-4">
             <p className="text-sm text-muted-foreground">
-              Already have an account?{' '}
-              <Link href="/login" className="font-medium text-primary hover:underline">
+              Already have an account?{" "}
+              <Link
+                href="/login"
+                className="font-medium text-primary hover:underline"
+              >
                 Log in
               </Link>
             </p>

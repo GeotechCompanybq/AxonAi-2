@@ -7,13 +7,19 @@ export function Logo(props: SVGProps<SVGSVGElement>) {
       viewBox="0 0 200 50"
       width="120"
       height="30"
-      aria-label="Dey Weaver Logo"
+      aria-label="Axon Logo"
       {...props}
     >
       <defs>
         <linearGradient id="goldGradient" x1="0%" y1="0%" x2="100%" y2="0%">
-          <stop offset="0%" style={{ stopColor: "hsl(var(--primary))", stopOpacity: 1 }} />
-          <stop offset="100%" style={{ stopColor: "hsl(var(--accent))", stopOpacity: 1 }} />
+          <stop
+            offset="0%"
+            style={{ stopColor: "hsl(var(--primary))", stopOpacity: 1 }}
+          />
+          <stop
+            offset="100%"
+            style={{ stopColor: "hsl(var(--accent))", stopOpacity: 1 }}
+          />
         </linearGradient>
       </defs>
       <rect width="200" height="50" fill="transparent" />
@@ -25,7 +31,7 @@ export function Logo(props: SVGProps<SVGSVGElement>) {
         fontWeight="bold"
         fill="url(#goldGradient)"
       >
-        Dey Weaver
+        Axon
       </text>
     </svg>
   );
