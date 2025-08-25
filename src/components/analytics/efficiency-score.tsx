@@ -54,17 +54,14 @@ export function EfficiencyScore() {
         setScoreData(result);
 
         // Send email notification if user is logged in and score is below 70
-        if (user?.firebaseMessagingToken && result.score < 70) {
-          await EmailNotificationService.sendAnalyticsNotification(
-            user.firebaseMessagingToken,
-            {
-              type: "efficiency_score",
-              data: {
-                efficiencyScore: result.score,
-                efficiencyMessage: result.message,
-              },
-            }
-          );
+        if (user?.email && result.score < 70) {
+          await EmailNotificationService.sendAnalyticsNotification(user.email, {
+            type: "efficiency_score",
+            data: {
+              efficiencyScore: result.score,
+              efficiencyMessage: result.message,
+            },
+          });
         }
       } catch (error) {
         console.error("Error fetching efficiency score:", error);

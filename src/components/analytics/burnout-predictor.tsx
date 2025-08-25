@@ -74,18 +74,15 @@ export function BurnoutPredictor() {
         });
         setBurnoutData(result);
 
-        // Send email notification if user is logged in and risk is not low
-        if (user?.firebaseMessagingToken && result.riskLevel !== "low") {
-          await EmailNotificationService.sendAnalyticsNotification(
-            user.firebaseMessagingToken,
-            {
-              type: "burnout_risk",
-              data: {
-                burnoutRiskLevel: result.riskLevel,
-                burnoutMessage: result.message,
-              },
-            }
-          );
+        // Send email notification via Firebase email if risk is not low
+        if (user?.email && result.riskLevel !== "low") {
+          await EmailNotificationService.sendAnalyticsNotification(user.email, {
+            type: "burnout_risk",
+            data: {
+              burnoutRiskLevel: result.riskLevel,
+              burnoutMessage: result.message,
+            },
+          });
         }
       } catch (error) {
         console.error("Error fetching burnout prediction:", error);

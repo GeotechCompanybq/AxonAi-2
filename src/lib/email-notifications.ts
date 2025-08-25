@@ -38,29 +38,23 @@ export class EmailNotificationService {
         throw new Error("Missing required email parameters");
       }
 
-      // Send email using Firebase Admin SDK
-      await admin.messaging().send({
-        notification: {
-          title: options.subject,
-          body: options.textBody || "",
-        },
-        token: options.to, // Note: This assumes the 'to' is a Firebase messaging token
-        webpush: {
-          notification: {
-            title: options.subject,
-            body: options.textBody || "",
-            requireInteraction: true,
+      // Create a document in the `mail` collection that works with
+      // the Firebase Trigger Email extension.
+      await admin
+        .firestore()
+        .collection("mail")
+        .add({
+          to: options.to,
+          message: {
+            subject: options.subject,
+            html: options.htmlBody,
+            text:
+              options.textBody ||
+              EmailNotificationService.extractTextFromHtml(options.htmlBody),
           },
-          fcmOptions: {
-            link: "/analytics", // Direct to analytics page
-          },
-          data: {
-            htmlBody: options.htmlBody,
-          },
-        },
-      });
+        });
 
-      console.log(`Email notification sent to ${options.to}`);
+      console.log(`Queued email to ${options.to}`);
     } catch (error) {
       console.error("Failed to send email notification:", error);
       throw error;
@@ -143,13 +137,13 @@ export class EmailNotificationService {
    * Send analytics notification
    */
   static async sendAnalyticsNotification(
-    userToken: string,
+    recipientEmail: string,
     notificationData: AnalyticsNotificationData
   ): Promise<void> {
     const htmlBody = this.createAnalyticsNotificationTemplate(notificationData);
 
     await this.sendEmail({
-      to: userToken,
+      to: recipientEmail,
       subject: `${notificationData.type
         .replace("_", " ")
         .toUpperCase()} Notification`,
