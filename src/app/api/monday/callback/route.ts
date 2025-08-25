@@ -42,7 +42,8 @@ export async function GET(req: NextRequest) {
     }
 
     // Persist token in an httpOnly cookie (simple demo). For production use a DB tied to user id.
-    cookies().set("monday_token", tokenJson.access_token, {
+    const cookieStore = await cookies();
+    cookieStore.set("monday_token", tokenJson.access_token, {
       httpOnly: true,
       sameSite: "lax",
       secure: true,
