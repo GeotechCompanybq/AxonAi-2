@@ -6,6 +6,7 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { ThemeToggleSwitch } from "@/components/settings/theme-toggle-switch";
+import { MondayConnect } from "@/components/settings/monday-connect";
 
 export default function SettingsPage() {
   return (
@@ -30,6 +31,8 @@ export default function SettingsPage() {
           <ThemeToggleSwitch />
         </CardContent>
       </Card>
+
+      <MondayConnect />
     </div>
   );
 }
