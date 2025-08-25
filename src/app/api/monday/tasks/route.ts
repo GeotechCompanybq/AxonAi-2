@@ -8,7 +8,7 @@ async function fetchMondayTasks(token: string) {
       id name
       items (limit: $limit) {
         id name
-        column_values { id title text }
+        column_values { id title text value type }
       }
     }
   }`;
@@ -22,11 +22,35 @@ async function fetchMondayTasks(token: string) {
   });
   const json = await res.json();
   if (!res.ok || json.errors) throw new Error("monday_api_error");
+  const meId = String(json?.data?.me?.id || "");
   const items =
     json.data?.boards?.flatMap((b: any) =>
       (b.items || []).map((i: any) => ({ ...i, boardName: b.name }))
     ) || [];
-  return items.map((it: any) => ({
+  // Keep only items assigned to the current user via a People column
+  const assignedToMe = items.filter((it: any) => {
+    const cvs = it.column_values || [];
+    for (const cv of cvs) {
+      if (
+        cv?.type !== "people" &&
+        !/people|assignee|owner/i.test(cv?.title || "")
+      )
+        continue;
+      try {
+        const v = cv?.value ? JSON.parse(cv.value) : null;
+        const persons = v?.personsAndTeams
+          ?.filter((x: any) => x.kind === "person")
+          .map((x: any) => String(x.id));
+        if (Array.isArray(persons) && persons.includes(meId)) return true;
+      } catch {}
+      // Fallback: some workspaces expose id in text when single user
+      if (typeof cv?.text === "string" && cv.text.length > 0) {
+        // can't reliably parse ID from text; skip
+      }
+    }
+    return false;
+  });
+  return assignedToMe.map((it: any) => ({
     name: it.name,
     description: it.boardName,
     dueDate:
@@ -41,7 +65,8 @@ async function fetchMondayTasks(token: string) {
 
 export async function GET(req: NextRequest) {
   try {
-    const token = cookies().get("monday_token")?.value;
+    const cookieStore = await cookies();
+    const token = cookieStore.get("monday_token")?.value;
     if (!token)
       return NextResponse.json({ error: "Not connected" }, { status: 400 });
     const tasks = await fetchMondayTasks(token);
