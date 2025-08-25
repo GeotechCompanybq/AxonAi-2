@@ -9,7 +9,7 @@ import {
 } from "@/components/ui/sidebar";
 import { Button } from "@/components/ui/button";
 import { SidebarNav } from "./sidebar-nav";
-import { Logo } from "@/components/icons";
+import { LogoImg } from "@/components/icons";
 import { LogOut } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
 
@@ -28,14 +28,14 @@ export function AppSidebar() {
           href="/dashboard"
           className="block md:hidden group-data-[collapsible=icon]:block"
         >
-          <Logo className="h-8 w-auto fill-primary" />
+          <LogoImg className="h-10 w-auto" />
           <span className="sr-only">Axon Home</span>
         </Link>
         <Link
           href="/dashboard"
           className="hidden md:block group-data-[collapsible=icon]:hidden"
         >
-          <Logo className="h-8 w-auto" />
+          <LogoImg className="h-12 w-auto" />
         </Link>
       </SidebarHeader>
       <SidebarContent className="flex-1 p-0">

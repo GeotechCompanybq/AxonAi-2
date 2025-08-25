@@ -12,7 +12,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { SidebarTrigger } from "@/components/ui/sidebar";
-import { Logo, IconSpinner } from "@/components/icons"; // Added IconSpinner
+import { IconSpinner } from "@/components/icons"; // Added IconSpinner
 import { Settings, User, LogOut, LogIn } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
 
@@ -40,11 +40,7 @@ export function AppHeader() {
   return (
     <header className="sticky top-0 z-50 w-full border-b border-white/5 bg-background/40 backdrop-blur-xl supports-[backdrop-filter]:bg-background/30">
       <div className="container flex h-16 items-center">
-        <div className="mr-4 hidden md:flex">
-          <Link href="/dashboard" className="mr-6 flex items-center space-x-2">
-            <Logo />
-          </Link>
-        </div>
+        <div className="mr-4 hidden md:flex" />
         <SidebarTrigger className="md:hidden" />
         <div className="flex flex-1 items-center justify-end space-x-4">
           {isLoading ? (

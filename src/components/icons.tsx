@@ -1,39 +1,36 @@
+import Image from "next/image";
 import type { SVGProps } from "react";
 
+export function LogoImg({
+  className = "",
+  ...rest
+}: { className?: string } & Omit<
+  React.ComponentProps<typeof Image>,
+  "src" | "alt" | "width" | "height"
+>) {
+  return (
+    <Image
+      src="/axon-logo.png"
+      alt="AxonAI"
+      width={160}
+      height={42}
+      className={className}
+      {...rest}
+    />
+  );
+}
+
+// Backwards-compatible placeholder if something still imports Logo as SVG
 export function Logo(props: SVGProps<SVGSVGElement>) {
   return (
     <svg
       xmlns="http://www.w3.org/2000/svg"
-      viewBox="0 0 200 50"
-      width="120"
-      height="30"
-      aria-label="Axon Logo"
+      viewBox="0 0 1 1"
+      width="1"
+      height="1"
+      aria-hidden="true"
       {...props}
-    >
-      <defs>
-        <linearGradient id="goldGradient" x1="0%" y1="0%" x2="100%" y2="0%">
-          <stop
-            offset="0%"
-            style={{ stopColor: "hsl(var(--primary))", stopOpacity: 1 }}
-          />
-          <stop
-            offset="100%"
-            style={{ stopColor: "hsl(var(--accent))", stopOpacity: 1 }}
-          />
-        </linearGradient>
-      </defs>
-      <rect width="200" height="50" fill="transparent" />
-      <text
-        x="10"
-        y="35"
-        fontFamily="var(--font-geist-sans), sans-serif"
-        fontSize="28"
-        fontWeight="bold"
-        fill="url(#goldGradient)"
-      >
-        Axon
-      </text>
-    </svg>
+    />
   );
 }
 
