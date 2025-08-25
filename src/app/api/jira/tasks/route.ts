@@ -73,7 +73,12 @@ async function fetchJiraTasks(token: string) {
     },
   });
   const me = await meRes.json();
-  console.log(`Fetching tasks for Jira user: ${me.name} (${me.email})`);
+  const meAccountId = me?.account_id || me?.accountId || "";
+  console.log(
+    `Fetching tasks for Jira user: ${me?.name || "unknown"} (${
+      me?.email || "no-email"
+    }) accountId=${meAccountId}`
+  );
 
   for (const site of sites) {
     const baseUrl = site.url;
@@ -84,6 +89,16 @@ async function fetchJiraTasks(token: string) {
 
     while (startAt < total) {
       const searchUrl = new URL(`${baseUrl}/rest/api/3/search`);
+      // Build robust JQL: use statusCategory to avoid custom status names,
+      // and match either currentUser() or the explicit accountId.
+      const jqlParts = [
+        "statusCategory != Done",
+        meAccountId
+          ? `(assignee = currentUser() OR assignee in (accountId(\"${meAccountId}\")))`
+          : "assignee = currentUser()",
+      ];
+      const jql = `${jqlParts.join(" AND ")} ORDER BY updated DESC`;
+
       const searchRes = await fetch(searchUrl, {
         method: "POST",
         headers: {
@@ -93,8 +108,8 @@ async function fetchJiraTasks(token: string) {
           "X-Atlassian-Token": "no-check",
         },
         body: JSON.stringify({
-          // Explicitly use currentUser() to ensure user-specific retrieval
-          jql: "status != Done AND assignee = currentUser()",
+          // Prefer statusCategory and include explicit accountId fallback
+          jql,
           startAt,
           maxResults,
           fields: [

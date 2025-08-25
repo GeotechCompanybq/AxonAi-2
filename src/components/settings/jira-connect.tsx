@@ -41,7 +41,9 @@ export function JiraConnect() {
     setIsLoading(true);
     setStatus(null);
     try {
-      const tasksRes = await fetch(`/api/jira/tasks`);
+      const url = new URL(`/api/jira/tasks`, window.location.origin);
+      if (user?.uid) url.searchParams.set("uid", user.uid);
+      const tasksRes = await fetch(url.toString());
       const tasksJson = await tasksRes.json();
       if (!tasksRes.ok) throw new Error(tasksJson.error || "not_connected");
 
