@@ -66,6 +66,7 @@ async function fetchMondayTasks(token: string) {
     boards (ids: [$boardId]) {
       id
       name
+      columns { id title type }
       items_page(limit:$limit, cursor:$cursor){
         cursor
         items{
@@ -73,7 +74,7 @@ async function fetchMondayTasks(token: string) {
           name
           state
           group { id title }
-          column_values { id title text value type }
+          column_values { id text value type }
         }
       }
     }
@@ -90,7 +91,11 @@ async function fetchMondayTasks(token: string) {
       const page = board?.items_page;
       const items = page?.items || [];
       for (const it of items) {
-        allItems.push({ ...it, boardName: b.name });
+        allItems.push({
+          ...it,
+          boardName: b.name,
+          boardColumns: board?.columns || [],
+        });
       }
       iCursor = page?.cursor || null;
     } while (iCursor);
@@ -100,12 +105,15 @@ async function fetchMondayTasks(token: string) {
   // Keep only items assigned to the current user via a People column
   const assignedToMe = items.filter((it: any) => {
     const cvs = it.column_values || [];
+    const columns: Array<any> = it.boardColumns || [];
+    const getMeta = (colId: string) => columns.find((c: any) => c.id === colId);
     for (const cv of cvs) {
-      if (
-        cv?.type !== "people" &&
-        !/people|assignee|owner/i.test(cv?.title || "")
-      )
-        continue;
+      const meta = getMeta(cv.id);
+      const isPeople =
+        cv?.type === "people" ||
+        meta?.type === "people" ||
+        /people|assignee|owner/i.test(String(meta?.title || cv.id));
+      if (!isPeople) continue;
       try {
         const v = cv?.value ? JSON.parse(cv.value) : null;
         const persons = v?.personsAndTeams
@@ -123,10 +131,18 @@ async function fetchMondayTasks(token: string) {
   // Further filter: must have a due date (Date or Timeline)
   const withDueDate = assignedToMe.filter((it: any) => {
     const cvs = it.column_values || [];
-    return cvs.some(
-      (c: any) =>
-        /date|timeline/i.test(c.title || "") && (c.text?.length || 0) > 0
-    );
+    const columns: Array<any> = it.boardColumns || [];
+    const getMeta = (colId: string) => columns.find((c: any) => c.id === colId);
+    return cvs.some((c: any) => {
+      const meta = getMeta(c.id);
+      const isDateLike =
+        c?.type === "date" ||
+        c?.type === "timeline" ||
+        meta?.type === "date" ||
+        meta?.type === "timeline" ||
+        /date|timeline/i.test(String(meta?.title || c.id));
+      return isDateLike && (c.text?.length || 0) > 0;
+    });
   });
   function mapStatus(raw: string | undefined): string {
     const s = (raw || "").toLowerCase();
@@ -144,8 +160,27 @@ async function fetchMondayTasks(token: string) {
 
   return withDueDate.map((it: any) => {
     const cvs = it.column_values || [];
-    const statusText = cvs.find((c: any) => c.title === "Status")?.text;
-    const dateCol = cvs.find((c: any) => /date|timeline/i.test(c.title || ""));
+    const columns: Array<any> = it.boardColumns || [];
+    const getMeta = (colId: string) => columns.find((c: any) => c.id === colId);
+    const statusCv = cvs.find((c: any) => {
+      const meta = getMeta(c.id);
+      return (
+        c?.type === "status" ||
+        meta?.type === "status" ||
+        /status/i.test(String(meta?.title || c.id))
+      );
+    });
+    const statusText = statusCv?.text;
+    const dateCol = cvs.find((c: any) => {
+      const meta = getMeta(c.id);
+      return (
+        c?.type === "date" ||
+        c?.type === "timeline" ||
+        meta?.type === "date" ||
+        meta?.type === "timeline" ||
+        /date|timeline/i.test(String(meta?.title || c.id))
+      );
+    });
     return {
       name: it.name,
       description: `${it.boardName}${
