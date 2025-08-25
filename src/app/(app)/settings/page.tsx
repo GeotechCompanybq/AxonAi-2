@@ -7,6 +7,7 @@ import {
 } from "@/components/ui/card";
 import { ThemeToggleSwitch } from "@/components/settings/theme-toggle-switch";
 import { MondayConnect } from "@/components/settings/monday-connect";
+import { JiraConnect } from "@/components/settings/jira-connect";
 
 export default function SettingsPage() {
   return (
@@ -33,6 +34,7 @@ export default function SettingsPage() {
       </Card>
 
       <MondayConnect />
+      <JiraConnect />
     </div>
   );
 }
