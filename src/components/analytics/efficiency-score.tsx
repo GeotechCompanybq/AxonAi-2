@@ -15,8 +15,11 @@ import type { Task } from "@/types";
 import { format } from "date-fns";
 import { IconSpinner } from "@/components/icons";
 import type { CalculateEfficiencyScoreOutput } from "@/ai/flows/calculate-efficiency-score";
+import { EmailNotificationService } from "@/lib/email-notifications";
+import { useAuth } from "@/hooks/use-auth";
 
 export function EfficiencyScore() {
+  const { user } = useAuth();
   const [scoreData, setScoreData] =
     useState<CalculateEfficiencyScoreOutput | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -49,6 +52,20 @@ export function EfficiencyScore() {
           currentDate,
         });
         setScoreData(result);
+
+        // Send email notification if user is logged in and score is below 70
+        if (user?.firebaseMessagingToken && result.score < 70) {
+          await EmailNotificationService.sendAnalyticsNotification(
+            user.firebaseMessagingToken,
+            {
+              type: "efficiency_score",
+              data: {
+                efficiencyScore: result.score,
+                efficiencyMessage: result.message,
+              },
+            }
+          );
+        }
       } catch (error) {
         console.error("Error fetching efficiency score:", error);
         setScoreData({
@@ -60,7 +77,7 @@ export function EfficiencyScore() {
       }
     }
     fetchData();
-  }, []);
+  }, [user]);
 
   let scoreColor = "text-primary"; // Default gold-ish
   let IconComponent = Zap;

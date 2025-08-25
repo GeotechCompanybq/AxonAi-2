@@ -1,5 +1,4 @@
-
-export type TaskStatus = 'todo' | 'inprogress' | 'done' | 'blocked';
+export type TaskStatus = "todo" | "inprogress" | "done" | "blocked";
 
 export interface SubTask {
   id: string;
@@ -13,7 +12,7 @@ export interface Task {
   name: string;
   description?: string;
   dueDate?: string; // ISO string
-  priority?: 'low' | 'medium' | 'high';
+  priority?: "low" | "medium" | "high";
   status: TaskStatus;
   subTasks?: SubTask[];
   category?: string; // e.g., "Work", "Personal", "Study"
@@ -34,11 +33,12 @@ export interface FirebaseUser {
   email: string | null;
   displayName: string | null;
   photoURL?: string | null;
+  firebaseMessagingToken?: string; // Add this line
 }
 
 export interface ImportantDate {
   id: string;
   date: string; // ISO string (YYYY-MM-DD for DayPicker compatibility, will be full ISO in storage)
   description: string;
-  type: 'importantDate'; // To distinguish from tasks if ever combined
+  type: "importantDate"; // To distinguish from tasks if ever combined
 }

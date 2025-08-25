@@ -16,6 +16,8 @@ import type { Task } from "@/types";
 import { format } from "date-fns";
 import { IconSpinner } from "@/components/icons";
 import type { PredictBurnoutOutput } from "@/ai/flows/predict-burnout";
+import { EmailNotificationService } from "@/lib/email-notifications";
+import { useAuth } from "@/hooks/use-auth";
 
 const riskConfig = {
   low: {
@@ -36,6 +38,7 @@ const riskConfig = {
 };
 
 export function BurnoutPredictor() {
+  const { user } = useAuth();
   const [burnoutData, setBurnoutData] = useState<PredictBurnoutOutput | null>(
     null
   );
@@ -70,6 +73,20 @@ export function BurnoutPredictor() {
           currentDate,
         });
         setBurnoutData(result);
+
+        // Send email notification if user is logged in and risk is not low
+        if (user?.firebaseMessagingToken && result.riskLevel !== "low") {
+          await EmailNotificationService.sendAnalyticsNotification(
+            user.firebaseMessagingToken,
+            {
+              type: "burnout_risk",
+              data: {
+                burnoutRiskLevel: result.riskLevel,
+                burnoutMessage: result.message,
+              },
+            }
+          );
+        }
       } catch (error) {
         console.error("Error fetching burnout prediction:", error);
         setBurnoutData({
@@ -82,7 +99,7 @@ export function BurnoutPredictor() {
       }
     }
     fetchData();
-  }, []);
+  }, [user]);
 
   const currentConfig = burnoutData
     ? riskConfig[burnoutData.riskLevel]

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { cookies } from "next/headers";
+import { EmailNotificationService } from "@/lib/email-notifications";
 
 async function fetchAccessibleSites(token: string) {
   try {
