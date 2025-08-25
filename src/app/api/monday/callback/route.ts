@@ -11,22 +11,30 @@ export async function GET(req: NextRequest) {
 
     const clientId = process.env.MONDAY_CLIENT_ID!;
     const clientSecret = process.env.MONDAY_CLIENT_SECRET!;
-    const redirectUri = process.env.MONDAY_REDIRECT_URI!;
+    const computedRedirectUri = new URL(
+      "/api/monday/callback",
+      req.nextUrl.origin
+    ).toString();
+    const redirectUri = process.env.MONDAY_REDIRECT_URI || computedRedirectUri;
+
+    const params = new URLSearchParams();
+    params.set("code", code);
+    params.set("client_id", clientId);
+    params.set("client_secret", clientSecret);
+    params.set("redirect_uri", redirectUri);
+    params.set("grant_type", "authorization_code");
 
     const tokenRes = await fetch("https://auth.monday.com/oauth2/token", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        code,
-        client_id: clientId,
-        client_secret: clientSecret,
-        redirect_uri: redirectUri,
-        grant_type: "authorization_code",
-      }),
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body: params.toString(),
     });
     const tokenJson = await tokenRes.json();
     if (!tokenRes.ok) {
-      console.error("monday token error", tokenJson);
+      console.error("monday token error", {
+        tokenJson,
+        redirectUriUsed: redirectUri,
+      });
       return NextResponse.json(
         { error: "Token exchange failed" },
         { status: 500 }

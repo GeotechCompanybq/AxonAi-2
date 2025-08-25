@@ -165,7 +165,10 @@ export function TimeUsageChart() {
         {isLoading ? (
           <IconSpinner className="h-12 w-12 text-primary" />
         ) : chartData.length > 0 ? (
-          <ChartContainer config={chartConfig} className="h-[300px] w-full">
+          <ChartContainer
+            config={chartConfig}
+            className="w-full h-[220px] sm:h-[260px] md:h-[320px]"
+          >
             <ResponsiveContainer width="100%" height="100%">
               <BarChart
                 data={chartData}

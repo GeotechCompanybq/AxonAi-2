@@ -1,17 +1,21 @@
+"use client";
 
-'use client';
-
-import { useState, useEffect } from 'react';
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
-import { AlertTriangle, ShieldCheck, Coffee } from 'lucide-react';
+import { useState, useEffect } from "react";
+import {
+  Card,
+  CardContent,
+  CardHeader,
+  CardTitle,
+  CardDescription,
+} from "@/components/ui/card";
+import { AlertTriangle, ShieldCheck, Coffee } from "lucide-react";
 import { Progress } from "@/components/ui/progress";
-import { handlePredictBurnout } from '@/lib/actions';
-import { getTasksFromLocalStorage } from '@/lib/task-storage';
-import type { Task } from '@/types';
-import { format } from 'date-fns';
-import { IconSpinner } from '@/components/icons';
-import type { PredictBurnoutOutput } from '@/ai/flows/predict-burnout';
-
+import { handlePredictBurnout } from "@/lib/actions";
+import { getTasksFromLocalStorage } from "@/lib/task-storage";
+import type { Task } from "@/types";
+import { format } from "date-fns";
+import { IconSpinner } from "@/components/icons";
+import type { PredictBurnoutOutput } from "@/ai/flows/predict-burnout";
 
 const riskConfig = {
   low: {
@@ -32,18 +36,20 @@ const riskConfig = {
 };
 
 export function BurnoutPredictor() {
-  const [burnoutData, setBurnoutData] = useState<PredictBurnoutOutput | null>(null);
+  const [burnoutData, setBurnoutData] = useState<PredictBurnoutOutput | null>(
+    null
+  );
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
     async function fetchData() {
       setIsLoading(true);
       const tasks = getTasksFromLocalStorage();
-      const currentDate = format(new Date(), 'yyyy-MM-dd');
-      
+      const currentDate = format(new Date(), "yyyy-MM-dd");
+
       if (tasks.length === 0) {
-         setBurnoutData({
-          riskLevel: 'low',
+        setBurnoutData({
+          riskLevel: "low",
           progressValue: 10,
           message: "No tasks to analyze. Enjoy your free time!",
         });
@@ -52,18 +58,25 @@ export function BurnoutPredictor() {
       }
 
       try {
-        const aiTasks = tasks.map(task => ({
+        const aiTasks = tasks.map((task) => ({
           name: task.name,
           dueDate: task.dueDate,
           priority: task.priority,
           status: task.status,
           category: task.category,
         }));
-        const result = await handlePredictBurnout({ tasks: aiTasks, currentDate });
+        const result = await handlePredictBurnout({
+          tasks: aiTasks,
+          currentDate,
+        });
         setBurnoutData(result);
       } catch (error) {
         console.error("Error fetching burnout prediction:", error);
-        setBurnoutData({ riskLevel: 'medium', progressValue: 50, message: "Error predicting burnout. Please monitor your well-being." });
+        setBurnoutData({
+          riskLevel: "medium",
+          progressValue: 50,
+          message: "Error predicting burnout. Please monitor your well-being.",
+        });
       } finally {
         setIsLoading(false);
       }
@@ -71,35 +84,51 @@ export function BurnoutPredictor() {
     fetchData();
   }, []);
 
-  const currentConfig = burnoutData ? riskConfig[burnoutData.riskLevel] : riskConfig.medium; // Default to medium if data not loaded
+  const currentConfig = burnoutData
+    ? riskConfig[burnoutData.riskLevel]
+    : riskConfig.medium; // Default to medium if data not loaded
   const progressValue = burnoutData ? burnoutData.progressValue : 50;
-  const message = burnoutData ? burnoutData.message : "Loading burnout prediction...";
+  const message = burnoutData
+    ? burnoutData.message
+    : "Loading burnout prediction...";
 
   return (
     <Card className="shadow-lg h-full">
       <CardHeader className="pb-2">
-         <div className="flex flex-row items-center justify-between space-y-0">
-            <CardTitle className="text-base font-medium">AI Burnout Predictor</CardTitle>
-            {isLoading ? <IconSpinner className="h-5 w-5 text-primary" /> : currentConfig.icon}
+        <div className="flex flex-row items-center justify-between space-y-0">
+          <CardTitle className="text-base sm:text-lg font-medium">
+            AI Burnout Predictor
+          </CardTitle>
+          {isLoading ? (
+            <IconSpinner className="h-5 w-5 text-primary" />
+          ) : (
+            currentConfig.icon
+          )}
         </div>
-        {!isLoading && burnoutData?.contributingFactors && burnoutData.contributingFactors.length > 0 && (
-            <CardDescription className="text-xs pt-1">
-                Key factors: {burnoutData.contributingFactors.join(', ')}.
+        {!isLoading &&
+          burnoutData?.contributingFactors &&
+          burnoutData.contributingFactors.length > 0 && (
+            <CardDescription className="text-xs sm:text-sm pt-1">
+              Key factors: {burnoutData.contributingFactors.join(", ")}.
             </CardDescription>
-        )}
+          )}
       </CardHeader>
       <CardContent>
         {isLoading ? (
-            <div className="text-center py-4">
-                <IconSpinner className="h-8 w-8 text-primary mb-2 mx-auto" />
-                <p className="text-muted-foreground">AI is analyzing your risk...</p>
-            </div>
+          <div className="text-center py-4">
+            <IconSpinner className="h-8 w-8 text-primary mb-2 mx-auto" />
+            <p className="text-muted-foreground">
+              AI is analyzing your risk...
+            </p>
+          </div>
         ) : burnoutData ? (
           <>
-            <div className="text-3xl font-bold mb-1">{currentConfig.text}</div>
-            <Progress 
-              value={progressValue} 
-              aria-label={`Burnout risk: ${currentConfig.text}`} 
+            <div className="text-2xl sm:text-3xl font-bold mb-1">
+              {currentConfig.text}
+            </div>
+            <Progress
+              value={progressValue}
+              aria-label={`Burnout risk: ${currentConfig.text}`}
               className="h-3 my-2"
               // Use Tailwind CSS for progress bar color based on risk level via theme if possible
               // For direct styling via ShadCN's CSS variables, ensure they are defined in globals.css for chart-1, chart-2 etc.
@@ -113,30 +142,33 @@ export function BurnoutPredictor() {
                 Using [&>div]:bg-red-500 etc. for the indicator:
             */}
             <style jsx>{`
-              .progress-indicator-low > div { background-color: hsl(var(--chart-1)) !important; } /* Or a green variable */
-              .progress-indicator-medium > div { background-color: hsl(var(--chart-2)) !important; } /* Or a yellow variable */
-              .progress-indicator-high > div { background-color: hsl(var(--destructive)) !important; }
+              .progress-indicator-low > div {
+                background-color: hsl(var(--chart-1)) !important;
+              } /* Or a green variable */
+              .progress-indicator-medium > div {
+                background-color: hsl(var(--chart-2)) !important;
+              } /* Or a yellow variable */
+              .progress-indicator-high > div {
+                background-color: hsl(var(--destructive)) !important;
+              }
             `}</style>
-             {/* <Progress value={progressValue} className={cn("h-3 my-2", 
+            {/* <Progress value={progressValue} className={cn("h-3 my-2", 
                 burnoutData.riskLevel === 'low' ? 'progress-indicator-low' :
                 burnoutData.riskLevel === 'medium' ? 'progress-indicator-medium' :
                 'progress-indicator-high'
              )} /> */}
 
-
-            <p className="text-sm text-muted-foreground mt-2">
-              {message}
-            </p>
+            <p className="text-sm text-muted-foreground mt-2">{message}</p>
             <p className="text-xs text-muted-foreground mt-1">
               Based on AI analysis of your current task patterns.
             </p>
           </>
         ) : (
-          <p className="text-muted-foreground">Could not load burnout prediction.</p>
+          <p className="text-muted-foreground">
+            Could not load burnout prediction.
+          </p>
         )}
       </CardContent>
     </Card>
   );
 }
-
-    
