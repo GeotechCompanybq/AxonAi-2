@@ -7,7 +7,7 @@ export async function GET(req: NextRequest) {
     req.nextUrl.origin
   ).toString();
   const redirectUri = process.env.MONDAY_REDIRECT_URI || computedRedirectUri;
-  const scope = process.env.MONDAY_SCOPES || "boards:read users:read";
+  const scope = process.env.MONDAY_SCOPES || "me:read boards:read users:read";
   const state = "monday_oauth_state";
   if (!clientId) {
     return NextResponse.json(

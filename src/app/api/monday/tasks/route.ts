@@ -4,7 +4,7 @@ import { cookies } from "next/headers";
 async function fetchMondayTasks(token: string) {
   const query = `query($limit:Int!){
     me { id name email }
-    boards (limit: 10) {
+    boards (limit: 5) {
       id name
       items (limit: $limit) {
         id name
