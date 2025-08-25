@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { IconSpinner } from "@/components/icons";
@@ -10,6 +10,23 @@ export function MondayConnect() {
   const { user } = useAuth();
   const [isLoading, setIsLoading] = useState(false);
   const [status, setStatus] = useState<string | null>(null);
+  const [connected, setConnected] = useState<boolean | null>(null);
+
+  useEffect(() => {
+    let ignore = false;
+    (async () => {
+      try {
+        const res = await fetch("/api/monday/status", { cache: "no-store" });
+        const json = await res.json();
+        if (!ignore) setConnected(Boolean(json?.connected));
+      } catch {
+        if (!ignore) setConnected(false);
+      }
+    })();
+    return () => {
+      ignore = true;
+    };
+  }, []);
 
   const connect = useCallback(async () => {
     const url = new URL("/api/monday/auth", window.location.origin);
@@ -53,7 +70,7 @@ export function MondayConnect() {
           </div>
           <div className="flex gap-2">
             <Button onClick={connect} variant="outline">
-              Connect
+              {connected ? "Reconnect" : "Connect"}
             </Button>
             <Button onClick={pullAndPlan} disabled={isLoading}>
               {isLoading ? (
@@ -66,6 +83,11 @@ export function MondayConnect() {
             </Button>
           </div>
         </div>
+        {connected && (
+          <div className="text-xs">
+            <span className="text-emerald-600">Connected</span> to Monday.com
+          </div>
+        )}
         {status && (
           <div className="text-xs text-muted-foreground">{status}</div>
         )}
