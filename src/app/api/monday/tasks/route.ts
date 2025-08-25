@@ -21,7 +21,10 @@ async function fetchMondayTasks(token: string) {
     body: JSON.stringify({ query, variables: { limit: 200 } }),
   });
   const json = await res.json();
-  if (!res.ok || json.errors) throw new Error("monday_api_error");
+  if (!res.ok || json.errors) {
+    console.error("monday graphql error", { status: res.status, json });
+    throw new Error("monday_api_error");
+  }
   const meId = String(json?.data?.me?.id || "");
   const items =
     json.data?.boards?.flatMap((b: any) =>
