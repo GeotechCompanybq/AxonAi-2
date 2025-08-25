@@ -59,6 +59,19 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     return () => unsubscribe();
   }, []);
 
+  // Ensure redirect to dashboard after successful auth on mobile redirect flows
+  useEffect(() => {
+    if (!isLoading && user) {
+      const onAuthPages =
+        pathname === "/" ||
+        pathname.startsWith("/login") ||
+        pathname.startsWith("/signup");
+      if (onAuthPages) {
+        router.replace("/dashboard");
+      }
+    }
+  }, [user, isLoading, pathname, router]);
+
   // Complete OAuth redirect flows on return
   useEffect(() => {
     // Only run in browser
