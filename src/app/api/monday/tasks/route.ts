@@ -2,39 +2,73 @@ import { NextRequest, NextResponse } from "next/server";
 import { cookies } from "next/headers";
 
 async function fetchMondayTasks(token: string) {
-  // Prefer boards_page + items_page as per Monday API docs
-  const queryBoardsPage = `query($bLimit:Int!,$iLimit:Int!){
-    me { id name email }
-    boards_page(limit: $bLimit) {
+  // GraphQL helpers and queries
+  async function graphql<T = any>(
+    query: string,
+    variables: Record<string, any>
+  ) {
+    const res = await fetch("https://api.monday.com/v2", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify({ query, variables }),
+    });
+    const json = await res.json();
+    if (!res.ok || json.errors) {
+      throw new Error(JSON.stringify(json.errors || json));
+    }
+    return json as T;
+  }
+
+  // 1) Get current user id
+  const meQuery = `query { me { id name email } }`;
+  const meJson = await graphql(meQuery, {});
+  const meId = String(meJson?.data?.me?.id || "");
+
+  // 2) Page through all boards using boards_page (fallback to boards if needed)
+  const boards: Array<{ id: string; name: string }> = [];
+  const boardsPageQuery = `query($limit:Int!,$cursor:String){
+    boards_page(limit: $limit, cursor: $cursor) {
       cursor
-      boards {
-        id
-        name
-        state
-        board_kind
-        items_page(limit: $iLimit) {
-          cursor
-          items {
-            id
-            name
-            state
-            group { id title }
-            column_values { id title text value type }
-          }
-        }
-      }
+      boards { id name }
     }
   }`;
-  const queryBoards = `query($bLimit:Int!,$iLimit:Int!){
-    me { id name email }
-    boards(limit: $bLimit) {
+  let bCursor: string | null = null;
+  let supportsBoardsPage = true;
+  try {
+    do {
+      const json: any = await graphql(boardsPageQuery, {
+        limit: 50,
+        cursor: bCursor,
+      });
+      const page = json?.data?.boards_page;
+      const pageBoards = page?.boards || [];
+      for (const b of pageBoards)
+        boards.push({ id: String(b.id), name: String(b.name) });
+      bCursor = page?.cursor || null;
+    } while (bCursor);
+  } catch (e) {
+    supportsBoardsPage = false;
+  }
+  if (!supportsBoardsPage) {
+    const boardsQuery = `query($limit:Int!){ boards(limit:$limit){ id name } }`;
+    const json: any = await graphql(boardsQuery, { limit: 200 });
+    const arr = json?.data?.boards || [];
+    for (const b of arr)
+      boards.push({ id: String(b.id), name: String(b.name) });
+  }
+
+  // 3) For each board, page through all items via items_page
+  const allItems: any[] = [];
+  const itemsPageQuery = `query($boardId:ID!,$limit:Int!,$cursor:String){
+    boards (ids: [$boardId]) {
       id
       name
-      state
-      board_kind
-      items_page(limit: $iLimit) {
+      items_page(limit:$limit, cursor:$cursor){
         cursor
-        items {
+        items{
           id
           name
           state
@@ -44,48 +78,25 @@ async function fetchMondayTasks(token: string) {
       }
     }
   }`;
-
-  async function runQuery(query: string) {
-    const res = await fetch("https://api.monday.com/v2", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${token}`,
-      },
-      body: JSON.stringify({ query, variables: { bLimit: 5, iLimit: 200 } }),
-    });
-    const json = await res.json();
-    return { res, json } as const;
+  for (const b of boards) {
+    let iCursor: string | null = null;
+    do {
+      const json: any = await graphql(itemsPageQuery, {
+        boardId: b.id,
+        limit: 200,
+        cursor: iCursor,
+      });
+      const board = (json?.data?.boards || [])[0];
+      const page = board?.items_page;
+      const items = page?.items || [];
+      for (const it of items) {
+        allItems.push({ ...it, boardName: b.name });
+      }
+      iCursor = page?.cursor || null;
+    } while (iCursor);
   }
 
-  let { res, json } = await runQuery(queryBoardsPage);
-  if (!res.ok || json.errors) {
-    const fieldError = Array.isArray(json?.errors)
-      ? json.errors.find(
-          (e: any) =>
-            typeof e?.message === "string" && e.message.includes("boards_page")
-        )
-      : undefined;
-    if (fieldError) {
-      // Fallback to older boards field if boards_page unsupported
-      ({ res, json } = await runQuery(queryBoards));
-    }
-  }
-  if (!res.ok || json.errors) {
-    console.error("monday graphql error", { status: res.status, json });
-    const detail = JSON.stringify(json?.errors || json);
-    throw new Error(`monday_api_error: ${detail}`);
-  }
-  const meId = String(json?.data?.me?.id || "");
-  const boardsArr = json.data?.boards_page?.boards || json.data?.boards || [];
-  const items =
-    boardsArr.flatMap((b: any) =>
-      (b.items_page?.items || []).map((i: any) => ({
-        ...i,
-        boardName: b.name,
-        group: i.group,
-      }))
-    ) || [];
+  const items = allItems;
   // Keep only items assigned to the current user via a People column
   const assignedToMe = items.filter((it: any) => {
     const cvs = it.column_values || [];
@@ -109,6 +120,14 @@ async function fetchMondayTasks(token: string) {
     }
     return false;
   });
+  // Further filter: must have a due date (Date or Timeline)
+  const withDueDate = assignedToMe.filter((it: any) => {
+    const cvs = it.column_values || [];
+    return cvs.some(
+      (c: any) =>
+        /date|timeline/i.test(c.title || "") && (c.text?.length || 0) > 0
+    );
+  });
   function mapStatus(raw: string | undefined): string {
     const s = (raw || "").toLowerCase();
     if (s.includes("done")) return "done";
@@ -123,7 +142,7 @@ async function fetchMondayTasks(token: string) {
     return s || "todo";
   }
 
-  return assignedToMe.map((it: any) => {
+  return withDueDate.map((it: any) => {
     const cvs = it.column_values || [];
     const statusText = cvs.find((c: any) => c.title === "Status")?.text;
     const dateCol = cvs.find((c: any) => /date|timeline/i.test(c.title || ""));
