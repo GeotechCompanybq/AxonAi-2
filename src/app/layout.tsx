@@ -17,7 +17,7 @@ export const metadata: Metadata = {
   title: "Axon",
   description: "Your day. Your goals. No stress. Let AI handle the mess.",
   icons: {
-    icon: "/logo.png",
+    icon: "/axon-logo.png",
   },
 };
 
