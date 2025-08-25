@@ -2,38 +2,89 @@ import { NextRequest, NextResponse } from "next/server";
 import { cookies } from "next/headers";
 
 async function fetchMondayTasks(token: string) {
-  const query = `query($limit:Int!){
+  // Prefer boards_page + items_page as per Monday API docs
+  const queryBoardsPage = `query($bLimit:Int!,$iLimit:Int!){
     me { id name email }
-    boards (limit: 5) {
+    boards_page(limit: $bLimit) {
+      cursor
+      boards {
+        id
+        name
+        state
+        board_kind
+        items_page(limit: $iLimit) {
+          cursor
+          items {
+            id
+            name
+            state
+            group { id title }
+            column_values { id title text value type }
+          }
+        }
+      }
+    }
+  }`;
+  const queryBoards = `query($bLimit:Int!,$iLimit:Int!){
+    me { id name email }
+    boards(limit: $bLimit) {
       id
       name
-      items_page (limit: $limit) {
+      state
+      board_kind
+      items_page(limit: $iLimit) {
+        cursor
         items {
           id
           name
+          state
+          group { id title }
           column_values { id title text value type }
         }
       }
     }
   }`;
-  const res = await fetch("https://api.monday.com/v2", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${token}`,
-    },
-    body: JSON.stringify({ query, variables: { limit: 200 } }),
-  });
-  const json = await res.json();
+
+  async function runQuery(query: string) {
+    const res = await fetch("https://api.monday.com/v2", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify({ query, variables: { bLimit: 5, iLimit: 200 } }),
+    });
+    const json = await res.json();
+    return { res, json } as const;
+  }
+
+  let { res, json } = await runQuery(queryBoardsPage);
+  if (!res.ok || json.errors) {
+    const fieldError = Array.isArray(json?.errors)
+      ? json.errors.find(
+          (e: any) =>
+            typeof e?.message === "string" && e.message.includes("boards_page")
+        )
+      : undefined;
+    if (fieldError) {
+      // Fallback to older boards field if boards_page unsupported
+      ({ res, json } = await runQuery(queryBoards));
+    }
+  }
   if (!res.ok || json.errors) {
     console.error("monday graphql error", { status: res.status, json });
     const detail = JSON.stringify(json?.errors || json);
     throw new Error(`monday_api_error: ${detail}`);
   }
   const meId = String(json?.data?.me?.id || "");
+  const boardsArr = json.data?.boards_page?.boards || json.data?.boards || [];
   const items =
-    json.data?.boards?.flatMap((b: any) =>
-      (b.items_page?.items || []).map((i: any) => ({ ...i, boardName: b.name }))
+    boardsArr.flatMap((b: any) =>
+      (b.items_page?.items || []).map((i: any) => ({
+        ...i,
+        boardName: b.name,
+        group: i.group,
+      }))
     ) || [];
   // Keep only items assigned to the current user via a People column
   const assignedToMe = items.filter((it: any) => {
@@ -58,17 +109,35 @@ async function fetchMondayTasks(token: string) {
     }
     return false;
   });
-  return assignedToMe.map((it: any) => ({
-    name: it.name,
-    description: it.boardName,
-    dueDate:
-      it.column_values?.find((c: any) => c.title === "Date")?.text || undefined,
-    priority: "medium",
-    status: (
-      it.column_values?.find((c: any) => c.title === "Status")?.text || "todo"
-    ).toLowerCase(),
-    category: it.boardName || "Work",
-  }));
+  function mapStatus(raw: string | undefined): string {
+    const s = (raw || "").toLowerCase();
+    if (s.includes("done")) return "done";
+    if (s.includes("stuck") || s.includes("blocked")) return "blocked";
+    if (
+      s.includes("working") ||
+      s.includes("in progress") ||
+      s.includes("progress")
+    )
+      return "inprogress";
+    if (s.includes("not started") || s.includes("backlog")) return "todo";
+    return s || "todo";
+  }
+
+  return assignedToMe.map((it: any) => {
+    const cvs = it.column_values || [];
+    const statusText = cvs.find((c: any) => c.title === "Status")?.text;
+    const dateCol = cvs.find((c: any) => /date|timeline/i.test(c.title || ""));
+    return {
+      name: it.name,
+      description: `${it.boardName}${
+        it.group?.title ? " · " + it.group.title : ""
+      }`,
+      dueDate: dateCol?.text || undefined,
+      priority: "medium",
+      status: mapStatus(statusText),
+      category: it.boardName || "Work",
+    };
+  });
 }
 
 export async function GET(req: NextRequest) {
