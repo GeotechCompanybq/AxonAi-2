@@ -64,6 +64,16 @@ async function fetchJiraTasks(token: string) {
   const allTasks: any[] = [];
   const sites = await fetchAccessibleSites(token);
 
+  // First, get user details to log who's retrieving tasks
+  const meRes = await fetch("https://api.atlassian.com/me", {
+    headers: {
+      Authorization: `Bearer ${token}`,
+      Accept: "application/json",
+    },
+  });
+  const me = await meRes.json();
+  console.log(`Fetching tasks for Jira user: ${me.name} (${me.email})`);
+
   for (const site of sites) {
     const baseUrl = site.url;
     const cloudId = site.id;
@@ -82,7 +92,7 @@ async function fetchJiraTasks(token: string) {
           "X-Atlassian-Token": "no-check",
         },
         body: JSON.stringify({
-          // Use JQL to match read:jira-work scope
+          // Explicitly use currentUser() to ensure user-specific retrieval
           jql: "status != Done AND assignee = currentUser()",
           startAt,
           maxResults,
@@ -94,6 +104,7 @@ async function fetchJiraTasks(token: string) {
             "duedate",
             "project",
             "issuetype",
+            "assignee", // Add assignee to verify
           ],
         }),
       });
@@ -106,6 +117,18 @@ async function fetchJiraTasks(token: string) {
       const searchData = await searchRes.json();
       total = searchData.total;
 
+      // Log task details for verification
+      console.log(
+        `Retrieved ${searchData.issues.length} tasks from ${site.name}`
+      );
+      searchData.issues.forEach((issue: any) => {
+        console.log(`- Task: ${issue.key} - ${issue.fields.summary}`);
+        // Optional: Log assignee details for extra verification
+        console.log(
+          `  Assignee: ${issue.fields.assignee?.displayName || "Unknown"}`
+        );
+      });
+
       const siteTasks = searchData.issues.map(transformJiraIssue);
       allTasks.push(...siteTasks);
 
@@ -114,6 +137,7 @@ async function fetchJiraTasks(token: string) {
     }
   }
 
+  console.log(`Total tasks retrieved: ${allTasks.length}`);
   return allTasks;
 }
 

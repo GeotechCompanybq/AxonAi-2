@@ -82,7 +82,7 @@ export function JiraConnect() {
               ? t.priority
               : "medium",
           status: normalizeStatus(t.status),
-          category: "Jira",
+          category: t.category || "Jira",
         })
       );
 
@@ -103,7 +103,7 @@ export function JiraConnect() {
       const aiJson = await aiRes.json();
       if (!aiRes.ok) throw new Error(aiJson.error || "ai_failed");
 
-      // Also generate a focused plan for just today
+      // Generate a focused day plan
       const dayPlanRes = await fetch("/api/ai/plan-for-day", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
