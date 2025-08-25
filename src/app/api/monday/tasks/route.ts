@@ -77,9 +77,7 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ tasks });
   } catch (e) {
     console.error("monday tasks error", e);
-    return NextResponse.json(
-      { error: "Failed to fetch tasks" },
-      { status: 500 }
-    );
+    const message = e instanceof Error ? e.message : "Failed to fetch tasks";
+    return NextResponse.json({ error: message }, { status: 500 });
   }
 }
