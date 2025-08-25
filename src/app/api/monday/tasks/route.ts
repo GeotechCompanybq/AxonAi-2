@@ -5,10 +5,14 @@ async function fetchMondayTasks(token: string) {
   const query = `query($limit:Int!){
     me { id name email }
     boards (limit: 5) {
-      id name
-      items (limit: $limit) {
-        id name
-        column_values { id title text value type }
+      id
+      name
+      items_page (limit: $limit) {
+        items {
+          id
+          name
+          column_values { id title text value type }
+        }
       }
     }
   }`;
@@ -29,7 +33,7 @@ async function fetchMondayTasks(token: string) {
   const meId = String(json?.data?.me?.id || "");
   const items =
     json.data?.boards?.flatMap((b: any) =>
-      (b.items || []).map((i: any) => ({ ...i, boardName: b.name }))
+      (b.items_page?.items || []).map((i: any) => ({ ...i, boardName: b.name }))
     ) || [];
   // Keep only items assigned to the current user via a People column
   const assignedToMe = items.filter((it: any) => {
@@ -70,7 +74,18 @@ async function fetchMondayTasks(token: string) {
 export async function GET(req: NextRequest) {
   try {
     const cookieStore = await cookies();
-    const token = cookieStore.get("monday_token")?.value;
+    let token = cookieStore.get("monday_token")?.value;
+    if (!token) {
+      // Attempt DB lookup using uid passed via query
+      const uid = req.nextUrl.searchParams.get("uid") || undefined;
+      if (uid) {
+        try {
+          const { adminDb } = await import("@/lib/firebase-admin");
+          const snap = await adminDb.collection("users").doc(uid).get();
+          token = snap.get("monday.accessToken") as string | undefined;
+        } catch {}
+      }
+    }
     if (!token)
       return NextResponse.json({ error: "Not connected" }, { status: 400 });
     const tasks = await fetchMondayTasks(token);

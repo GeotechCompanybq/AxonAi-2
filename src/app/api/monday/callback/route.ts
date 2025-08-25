@@ -5,7 +5,8 @@ export async function GET(req: NextRequest) {
   try {
     const { searchParams } = new URL(req.url);
     const code = searchParams.get("code");
-    const uid = searchParams.get("uid") || undefined;
+    const state = searchParams.get("state") || undefined;
+    const uid = state?.startsWith("uid:") ? state.slice(4) : undefined;
     if (!code)
       return NextResponse.json({ error: "Missing code" }, { status: 400 });
 
@@ -41,7 +42,7 @@ export async function GET(req: NextRequest) {
       );
     }
 
-    // Persist token in an httpOnly cookie (simple demo). For production use a DB tied to user id.
+    // Persist token in an httpOnly cookie for convenience; also store in DB tied to user.
     const cookieStore = await cookies();
     cookieStore.set("monday_token", tokenJson.access_token, {
       httpOnly: true,
@@ -50,6 +51,27 @@ export async function GET(req: NextRequest) {
       path: "/",
       maxAge: 60 * 60 * 24 * 30,
     });
+
+    // If uid is provided, store token in Firestore
+    if (uid) {
+      try {
+        const { adminDb } = await import("@/lib/firebase-admin");
+        await adminDb
+          .collection("users")
+          .doc(uid)
+          .set(
+            {
+              monday: {
+                accessToken: tokenJson.access_token,
+                updatedAt: Date.now(),
+              },
+            },
+            { merge: true }
+          );
+      } catch (err) {
+        console.error("failed to persist monday token in db", err);
+      }
+    }
 
     const dashboard = new URL("/settings", req.nextUrl.origin);
     return NextResponse.redirect(dashboard);

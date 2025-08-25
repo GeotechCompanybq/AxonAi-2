@@ -30,6 +30,7 @@ export function MondayConnect() {
 
   const connect = useCallback(async () => {
     const url = new URL("/api/monday/auth", window.location.origin);
+    if (user?.uid) url.searchParams.set("uid", user.uid);
     window.location.href = url.toString();
   }, [user]);
 
