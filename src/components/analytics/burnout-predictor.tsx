@@ -74,14 +74,21 @@ export function BurnoutPredictor() {
         });
         setBurnoutData(result);
 
-        // Send email notification via Firebase email if risk is not low
+        // Send email notification via server API if risk is not low
         if (user?.email && result.riskLevel !== "low") {
-          await EmailNotificationService.sendAnalyticsNotification(user.email, {
-            type: "burnout_risk",
-            data: {
-              burnoutRiskLevel: result.riskLevel,
-              burnoutMessage: result.message,
-            },
+          await fetch("/api/notify/email", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              to: user.email,
+              notificationData: {
+                type: "burnout_risk",
+                data: {
+                  burnoutRiskLevel: result.riskLevel,
+                  burnoutMessage: result.message,
+                },
+              },
+            }),
           });
         }
       } catch (error) {

@@ -55,12 +55,19 @@ export function EfficiencyScore() {
 
         // Send email notification if user is logged in and score is below 70
         if (user?.email && result.score < 70) {
-          await EmailNotificationService.sendAnalyticsNotification(user.email, {
-            type: "efficiency_score",
-            data: {
-              efficiencyScore: result.score,
-              efficiencyMessage: result.message,
-            },
+          await fetch("/api/notify/email", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              to: user.email,
+              notificationData: {
+                type: "efficiency_score",
+                data: {
+                  efficiencyScore: result.score,
+                  efficiencyMessage: result.message,
+                },
+              },
+            }),
           });
         }
       } catch (error) {
