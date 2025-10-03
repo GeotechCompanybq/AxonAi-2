@@ -89,9 +89,7 @@
       {
         "name": "Dashboard",
         "description": "Overview of daily plan and key productivity insights.",
-        "files": [
-          "src/app/(app)/dashboard/page.tsx"
-        ]
+        "files": ["src/app/(app)/dashboard/page.tsx"]
       },
       {
         "name": "Tasks",
@@ -186,9 +184,7 @@
       {
         "name": "Floating Chatbot",
         "description": "Client-side chatbot entry point for AI assistance.",
-        "files": [
-          "src/components/chat/floating-chatbot.tsx"
-        ]
+        "files": ["src/components/chat/floating-chatbot.tsx"]
       },
       {
         "name": "UI Primitives",
@@ -302,16 +298,12 @@
       {
         "name": "API Routes - Notifications",
         "description": "Email notification endpoint.",
-        "files": [
-          "src/app/api/notify/email/route.ts"
-        ]
+        "files": ["src/app/api/notify/email/route.ts"]
       },
       {
         "name": "Types",
         "description": "Shared TypeScript types and interfaces.",
-        "files": [
-          "src/types/index.ts"
-        ]
+        "files": ["src/types/index.ts"]
       },
       {
         "name": "Global Styles & Theme",
@@ -320,8 +312,8 @@
           "src/app/globals.css",
           "tailwind.config.ts",
           "postcss.config.mjs",
-          "public/favicon.ico",
-          "public/favicon.jpg"
+          "public/favicon.png",
+          "public/favicon.png"
         ]
       }
     ]

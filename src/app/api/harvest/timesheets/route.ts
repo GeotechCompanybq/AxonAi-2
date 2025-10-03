@@ -99,9 +99,41 @@ export async function GET(req: NextRequest) {
     if (to) params.set("to", to);
     params.set("per_page", "100");
 
+    const uid = req.nextUrl.searchParams.get("uid") || undefined;
     if (!fetchAll) {
       const data = await fetchHarvestTimeEntriesPage(token, accountId, params);
-      return NextResponse.json({ timeEntries: data?.time_entries || [] });
+      const list = data?.time_entries || [];
+      if (uid) {
+        try {
+          const { adminDb } = await import("@/lib/firebase-admin");
+          const col = adminDb
+            .collection("users")
+            .doc(uid)
+            .collection("harvestTimesheets");
+          for (const t of list) {
+            const id = String(
+              t?.id ?? `${t?.spent_date}_${t?.user?.id || "me"}`
+            );
+            await col
+              .doc(id)
+              .set(
+                { ...t, syncedAt: new Date().toISOString() },
+                { merge: true }
+              );
+            const topId = `${uid}_${id}`;
+            await adminDb
+              .collection("timesheets")
+              .doc(topId)
+              .set(
+                { uid, ...t, syncedAt: new Date().toISOString() },
+                { merge: true }
+              );
+          }
+        } catch (e) {
+          console.error("Failed to sync timesheets", e);
+        }
+      }
+      return NextResponse.json({ timeEntries: list });
     }
 
     // Paginate through all pages
@@ -117,6 +149,31 @@ export async function GET(req: NextRequest) {
       page = Number(nextPage);
     }
 
+    if (uid) {
+      try {
+        const { adminDb } = await import("@/lib/firebase-admin");
+        const col = adminDb
+          .collection("users")
+          .doc(uid)
+          .collection("harvestTimesheets");
+        for (const t of allEntries) {
+          const id = String(t?.id ?? `${t?.spent_date}_${t?.user?.id || "me"}`);
+          await col
+            .doc(id)
+            .set({ ...t, syncedAt: new Date().toISOString() }, { merge: true });
+          const topId = `${uid}_${id}`;
+          await adminDb
+            .collection("timesheets")
+            .doc(topId)
+            .set(
+              { uid, ...t, syncedAt: new Date().toISOString() },
+              { merge: true }
+            );
+        }
+      } catch (e) {
+        console.error("Failed to sync timesheets", e);
+      }
+    }
     return NextResponse.json({ timeEntries: allEntries });
   } catch (e) {
     console.error("harvest timesheets error", e);

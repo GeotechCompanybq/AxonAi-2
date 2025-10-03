@@ -52,7 +52,7 @@ export default function OrgLayout({ children }: { children: React.ReactNode }) {
   }
 
   return (
-    <SidebarProvider defaultOpen={true}>
+    <SidebarProvider defaultOpen={false}>
       <OrgSidebar />
       <SidebarInset className="flex flex-col min-h-screen ai-grid-bg">
         <AppHeader />

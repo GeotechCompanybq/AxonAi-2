@@ -67,7 +67,9 @@ export function SidebarNav() {
                   isActive ? "text-primary" : "text-foreground"
                 )}
               />
-              <span>{item.label}</span>
+              <span className="transition-opacity duration-200 group-data-[collapsible=icon]:opacity-0 group-hover/sidebar-wrapper:group-data-[collapsible=icon]:opacity-100">
+                {item.label}
+              </span>
             </SidebarMenuButton>
           </Link>
         </SidebarMenuItem>

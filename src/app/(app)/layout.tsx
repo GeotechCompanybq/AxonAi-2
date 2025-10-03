@@ -32,7 +32,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   }
 
   return (
-    <SidebarProvider defaultOpen={true}>
+    <SidebarProvider defaultOpen={false}>
       <AppSidebar />
       <SidebarInset className="flex flex-col min-h-screen ai-grid-bg">
         <AppHeader />

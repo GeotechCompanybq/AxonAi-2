@@ -14,7 +14,7 @@ export function LogoImg({
       alt="AxonAI"
       width={160}
       height={42}
-      className={className}
+      className={`select-none ${className} dark:invert-0 invert-[.9]`}
       {...rest}
     />
   );

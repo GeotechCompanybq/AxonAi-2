@@ -98,6 +98,7 @@ export default function TimesheetsPage() {
     setError(null);
     try {
       const url = new URL("/api/harvest/timesheets", window.location.origin);
+      const uid = (window as any)?.__AXON_UID__;
       const r = computeRange();
       if ("all" in r && r.all) {
         url.searchParams.set("all", "1");
@@ -106,6 +107,7 @@ export default function TimesheetsPage() {
         if ("to" in r && r.to) url.searchParams.set("to", r.to);
       }
       url.searchParams.set("per_page", "100");
+      if (uid) url.searchParams.set("uid", String(uid));
       const res = await fetch(url.toString(), { cache: "no-store" });
       const json = await res.json();
       if (!res.ok)

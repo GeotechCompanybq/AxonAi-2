@@ -254,8 +254,8 @@
         "src/app/globals.css",
         "tailwind.config.ts",
         "postcss.config.mjs",
-        "public/favicon.ico",
-        "public/favicon.jpg"
+        "public/favicon.png",
+        "public/favicon.png"
       ]
     }
   ]

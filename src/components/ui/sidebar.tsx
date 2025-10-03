@@ -145,6 +145,24 @@ const SidebarProvider = React.forwardRef<
               className
             )}
             ref={ref}
+            onMouseEnter={() => {
+              if (!isMobile) setOpen(true);
+            }}
+            onMouseLeave={(e) => {
+              if (!isMobile) {
+                // collapse only when cursor fully leaves the wrapper
+                const rect = (
+                  e.currentTarget as HTMLDivElement
+                ).getBoundingClientRect();
+                const { clientX, clientY } = e;
+                const isInside =
+                  clientX >= rect.left &&
+                  clientX <= rect.right &&
+                  clientY >= rect.top &&
+                  clientY <= rect.bottom;
+                if (!isInside) setOpen(false);
+              }
+            }}
             {...props}
           >
             {children}
@@ -175,7 +193,8 @@ const Sidebar = React.forwardRef<
     },
     ref
   ) => {
-    const { isMobile, state, openMobile, setOpenMobile } = useSidebar();
+    const { isMobile, state, openMobile, setOpenMobile, setOpen } =
+      useSidebar();
 
     if (collapsible === "none") {
       return (
@@ -241,14 +260,20 @@ const Sidebar = React.forwardRef<
             // Adjust the padding for floating and inset variants.
             variant === "floating" || variant === "inset"
               ? "p-2 group-data-[collapsible=icon]:w-[calc(var(--sidebar-width-icon)_+_theme(spacing.4)_+2px)]"
-              : "group-data-[collapsible=icon]:w-[--sidebar-width-icon] group-data-[side=left]:border-r group-data-[side=right]:border-l",
+              : "group-data-[collapsible=icon]:w-[--sidebar-width-icon]",
             className
           )}
+          onMouseEnter={() => {
+            if (!isMobile) setOpen(true);
+          }}
+          onMouseLeave={() => {
+            if (!isMobile) setOpen(false);
+          }}
           {...props}
         >
           <div
             data-sidebar="sidebar"
-            className="flex h-full w-full flex-col bg-sidebar/50 backdrop-blur-xl group-data-[variant=floating]:rounded-2xl group-data-[variant=floating]:border group-data-[variant=floating]:border-white/10 group-data-[variant=floating]:shadow-[0_8px_40px_rgba(0,0,0,0.45)]"
+            className="flex h-full w-full flex-col bg-sidebar group-data-[variant=floating]:rounded-2xl group-data-[variant=floating]:ring-1 group-data-[variant=floating]:ring-white/10"
           >
             {children}
           </div>
@@ -404,7 +429,7 @@ const SidebarContent = React.forwardRef<
       ref={ref}
       data-sidebar="content"
       className={cn(
-        "flex min-h-0 flex-1 flex-col gap-2 overflow-auto group-data-[collapsible=icon]:overflow-hidden",
+        "flex min-h-0 flex-1 flex-col gap-2 overflow-auto group-data-[collapsible=icon]:overflow-hidden group-hover/sidebar-wrapper:group-data-[collapsible=icon]:overflow-auto",
         className
       )}
       {...props}
@@ -440,7 +465,7 @@ const SidebarGroupLabel = React.forwardRef<
       data-sidebar="group-label"
       className={cn(
         "duration-200 flex h-8 shrink-0 items-center rounded-md px-2 text-xs font-medium text-sidebar-foreground/70 outline-none ring-sidebar-ring transition-[margin,opa] ease-linear focus-visible:ring-2 [&>svg]:size-4 [&>svg]:shrink-0",
-        "group-data-[collapsible=icon]:-mt-8 group-data-[collapsible=icon]:opacity-0",
+        "group-data-[collapsible=icon]:-mt-8 group-data-[collapsible=icon]:opacity-0 group-hover/sidebar-wrapper:group-data-[collapsible=icon]:mt-0 group-hover/sidebar-wrapper:group-data-[collapsible=icon]:opacity-100",
         className
       )}
       {...props}
