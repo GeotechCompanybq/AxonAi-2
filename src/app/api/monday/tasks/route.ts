@@ -75,6 +75,7 @@ async function fetchMondayTasks(token: string) {
           state
           group { id title }
           column_values { id text value type }
+          updates(limit:3){ id body text_body created_at creator{ id name } }
         }
       }
     }
@@ -181,6 +182,12 @@ async function fetchMondayTasks(token: string) {
         /date|timeline/i.test(String(meta?.title || c.id))
       );
     });
+    const comments: string[] = Array.isArray((it as any).updates)
+      ? ((it as any).updates as any[])
+          .map((u) => String(u?.text_body || "").trim())
+          .filter((t) => t.length > 0)
+      : [];
+
     return {
       name: it.name,
       description: `${it.boardName}${
@@ -190,6 +197,7 @@ async function fetchMondayTasks(token: string) {
       priority: "medium",
       status: mapStatus(statusText),
       category: it.boardName || "Work",
+      comments,
     };
   });
 }

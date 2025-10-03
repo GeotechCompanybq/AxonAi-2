@@ -18,6 +18,8 @@ export interface Task {
   category?: string; // e.g., "Work", "Personal", "Study"
   startTime?: string; // ISO string for scheduled start
   endTime?: string; // ISO string for scheduled end
+  // Optional comments (e.g., from Monday updates)
+  comments?: string[];
 }
 
 // For Dynamic Task Reallocation input
