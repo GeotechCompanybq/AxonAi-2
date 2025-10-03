@@ -153,17 +153,29 @@ export function TaskList() {
     setEditingTask(null);
   };
 
-  const filteredTasks = tasks.filter((task) => {
-    const matchesSearchTerm =
-      task.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      (task.description &&
-        task.description.toLowerCase().includes(searchTerm.toLowerCase()));
-    const matchesStatus =
-      statusFilter === "all" || task.status === statusFilter;
-    const matchesPriority =
-      priorityFilter === "all" || task.priority === priorityFilter;
-    return matchesSearchTerm && matchesStatus && matchesPriority;
-  });
+  const filteredTasks = tasks
+    .filter((task) => {
+      const matchesSearchTerm =
+        task.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        (task.description &&
+          task.description.toLowerCase().includes(searchTerm.toLowerCase()));
+      const matchesStatus =
+        statusFilter === "all" || task.status === statusFilter;
+      const matchesPriority =
+        priorityFilter === "all" || task.priority === priorityFilter;
+      return matchesSearchTerm && matchesStatus && matchesPriority;
+    })
+    // Sort with 'inprogress' first, then 'todo', then 'blocked', then 'done'.
+    .sort((a, b) => {
+      const rank = { inprogress: 0, todo: 1, blocked: 2, done: 3 } as const;
+      const ra = rank[a.status as keyof typeof rank] ?? 99;
+      const rb = rank[b.status as keyof typeof rank] ?? 99;
+      if (ra !== rb) return ra - rb;
+      // Tie-breaker: earlier due date first
+      const da = a.dueDate ? new Date(a.dueDate).getTime() : Infinity;
+      const db = b.dueDate ? new Date(b.dueDate).getTime() : Infinity;
+      return da - db;
+    });
 
   if (!isLoaded) {
     // You can show a loader here if preferred
