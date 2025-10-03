@@ -109,11 +109,20 @@ export class EmailNotificationService {
   ): string {
     const currentDate = format(new Date(), "MMMM dd, yyyy");
 
-    function frame(content: string, opts?: { title?: string; accent?: string; ctaHref?: string; ctaText?: string }) {
+    function frame(
+      content: string,
+      opts?: {
+        title?: string;
+        accent?: string;
+        ctaHref?: string;
+        ctaText?: string;
+      }
+    ) {
       const accent = opts?.accent || "#06b6d4"; // cyan-500
-      const cta = opts?.ctaHref && opts?.ctaText
-        ? `<div style=\"text-align:center;margin-top:24px\"><a href=\"${opts.ctaHref}\" style=\"background:${accent};color:white;padding:12px 18px;border-radius:10px;text-decoration:none;font-weight:600\">${opts.ctaText}</a></div>`
-        : "";
+      const cta =
+        opts?.ctaHref && opts?.ctaText
+          ? `<div style=\"text-align:center;margin-top:24px\"><a href=\"${opts.ctaHref}\" style=\"background:${accent};color:white;padding:12px 18px;border-radius:10px;text-decoration:none;font-weight:600\">${opts.ctaText}</a></div>`
+          : "";
       return `
         <div style="background:#0b1220;padding:24px 0;margin:0">
           <div style="max-width:640px;margin:0 auto;background:#0f172a;border:1px solid #1f2a44;border-radius:16px;overflow:hidden">
@@ -123,7 +132,11 @@ export class EmailNotificationService {
                 <div style="width:10px;height:10px;border-radius:50%;background:${accent}"></div>
                 <div style="font-size:18px;font-weight:700;letter-spacing:0.3px">AxonAI</div>
               </div>
-              ${opts?.title ? `<h1 style="margin:16px 0 0 0;color:#f8fafc;font-size:22px">${opts.title}</h1>` : ""}
+              ${
+                opts?.title
+                  ? `<h1 style="margin:16px 0 0 0;color:#f8fafc;font-size:22px">${opts.title}</h1>`
+                  : ""
+              }
               <p style="margin:6px 0 0 0;color:#94a3b8;font-size:12px">${currentDate}</p>
             </div>
             <div style="padding:16px 24px 24px 24px;color:#e2e8f0;line-height:1.6">${content}</div>
@@ -136,28 +149,66 @@ export class EmailNotificationService {
 
     switch (notificationData.type) {
       case "burnout_risk":
-        return frame(`
+        return frame(
+          `
           <h2 style="margin:0 0 10px 0;color:#fda4af">Burnout Risk</h2>
-          <p><strong>Risk Level:</strong> ${notificationData.data.burnoutRiskLevel?.toUpperCase() || "UNKNOWN"}</p>
-          <p>${notificationData.data.burnoutMessage || "Please review your workload and consider short breaks."}</p>
-        `, { title: "Wellness alert", accent: "#ef4444", ctaHref: "/analytics", ctaText: "View analytics" });
+          <p><strong>Risk Level:</strong> ${
+            notificationData.data.burnoutRiskLevel?.toUpperCase() || "UNKNOWN"
+          }</p>
+          <p>${
+            notificationData.data.burnoutMessage ||
+            "Please review your workload and consider short breaks."
+          }</p>
+        `,
+          {
+            title: "Wellness alert",
+            accent: "#ef4444",
+            ctaHref: "/analytics",
+            ctaText: "View analytics",
+          }
+        );
 
       case "efficiency_score":
-        return frame(`
+        return frame(
+          `
           <h2 style="margin:0 0 10px 0;color:#93c5fd">Efficiency Score</h2>
-          <p style="font-size:32px;margin:0 0 8px 0;font-weight:800;color:#f8fafc">${notificationData.data.efficiencyScore ?? 0}%</p>
-          <p>${notificationData.data.efficiencyMessage || "Keep pushing towards your weekly goal."}</p>
-        `, { title: "Performance update", accent: "#3b82f6", ctaHref: "/analytics", ctaText: "Improve efficiency" });
+          <p style="font-size:32px;margin:0 0 8px 0;font-weight:800;color:#f8fafc">${
+            notificationData.data.efficiencyScore ?? 0
+          }%</p>
+          <p>${
+            notificationData.data.efficiencyMessage ||
+            "Keep pushing towards your weekly goal."
+          }</p>
+        `,
+          {
+            title: "Performance update",
+            accent: "#3b82f6",
+            ctaHref: "/analytics",
+            ctaText: "Improve efficiency",
+          }
+        );
 
       case "time_usage":
-        return frame(`
+        return frame(
+          `
           <h2 style="margin:0 0 10px 0;color:#5eead4">Time Usage</h2>
-          <p>${notificationData.data.timeUsageSummary || "Your weekly distribution is ready."}</p>
-        `, { title: "Time analysis", accent: "#06b6d4", ctaHref: "/analytics", ctaText: "Optimize time" });
+          <p>${
+            notificationData.data.timeUsageSummary ||
+            "Your weekly distribution is ready."
+          }</p>
+        `,
+          {
+            title: "Time analysis",
+            accent: "#06b6d4",
+            ctaHref: "/analytics",
+            ctaText: "Optimize time",
+          }
+        );
 
       case "task_progress":
         const progress = notificationData.data.taskProgressSummary;
-        return frame(`
+        return frame(
+          `
           <h2 style="margin:0 0 10px 0;color:#c4b5fd">Task Progress</h2>
           <ul style="margin:0;padding-left:18px">
             <li>Total: ${progress?.total ?? 0}</li>
@@ -166,7 +217,14 @@ export class EmailNotificationService {
             <li>Done: ${progress?.done ?? 0}</li>
             <li>Blocked: ${progress?.blocked ?? 0}</li>
           </ul>
-        `, { title: "Tasks overview", accent: "#7c3aed", ctaHref: "/tasks", ctaText: "Open tasks" });
+        `,
+          {
+            title: "Tasks overview",
+            accent: "#7c3aed",
+            ctaHref: "/tasks",
+            ctaText: "Open tasks",
+          }
+        );
 
       default:
         throw new Error("Invalid analytics notification type");
