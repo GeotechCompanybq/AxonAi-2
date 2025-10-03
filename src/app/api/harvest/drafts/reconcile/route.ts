@@ -109,6 +109,7 @@ export async function POST(req: NextRequest) {
     const from = (body?.from || "").trim(); // YYYY-MM-DD
     const to = (body?.to || "").trim();
     const defaultHours = Number(body?.defaultHours ?? 1);
+    const targetPerDay = Number(body?.targetPerDay ?? 8);
     if (!from || !to) {
       return NextResponse.json(
         { error: "from and to are required (YYYY-MM-DD)" },
@@ -150,11 +151,16 @@ export async function POST(req: NextRequest) {
       to
     );
 
-    // Build a set of dates that already have Harvest entries
-    const datesWithEntries = new Set<string>();
+    // Aggregate existing Harvest hours per date
+    const hoursByDate = new Map<string, number>();
     for (const e of harvestEntries) {
       const d = String(e?.spent_date || "");
-      if (d) datesWithEntries.add(d);
+      if (!d) continue;
+      const h = Number(e?.hours || 0);
+      hoursByDate.set(
+        d,
+        (hoursByDate.get(d) || 0) + (Number.isFinite(h) ? h : 0)
+      );
     }
 
     // Filter Monday tasks in range and missing in Harvest
@@ -164,23 +170,58 @@ export async function POST(req: NextRequest) {
     }
 
     const drafts: DraftTimesheet[] = [];
+    // Group Monday tasks by dueDate
+    const tasksByDate = new Map<string, any[]>();
     for (const t of mondayTasks) {
-      const date = t?.dueDate as string | undefined;
+      const date = (t?.dueDate as string | undefined) || "";
       if (!inRange(date)) continue;
-      if (datesWithEntries.has(date!)) continue; // already have time on that date
-      const id = `${date}_${(t as any).id || t.name}`
-        .replace(/[^a-zA-Z0-9_-]/g, "")
-        .slice(0, 120);
-      drafts.push({
-        id,
-        spent_date: date!,
-        hours:
-          Number.isFinite(defaultHours) && defaultHours > 0 ? defaultHours : 1,
-        notes: `${t.name} — ${t.description || "from Monday"}`.slice(0, 255),
-        source: "monday",
-        createdAt: new Date().toISOString(),
-        status: "draft",
-      });
+      if (!tasksByDate.has(date)) tasksByDate.set(date, []);
+      tasksByDate.get(date)!.push(t);
+    }
+
+    const roundQuarter = (n: number) => Math.round(n * 4) / 4;
+
+    for (const [date, tasksOnDate] of tasksByDate.entries()) {
+      const existing = hoursByDate.get(date) || 0;
+      let missing = Math.max(0, targetPerDay - existing);
+      if (missing === 0) continue; // already satisfied for that day
+
+      // If the sum of defaultHours across tasks can fully cover the missing hours,
+      // distribute evenly; otherwise allocate greedily up to missing.
+      const maxCover =
+        tasksOnDate.length *
+        (Number.isFinite(defaultHours) && defaultHours > 0 ? defaultHours : 1);
+      const perEven =
+        maxCover >= missing ? missing / tasksOnDate.length : undefined;
+
+      for (let i = 0; i < tasksOnDate.length && missing > 0.001; i++) {
+        const t = tasksOnDate[i];
+        // Determine allocation for this task
+        let alloc =
+          perEven !== undefined ? perEven : Math.min(defaultHours, missing);
+        // For last task, assign whatever remains to hit the target exactly
+        const isLast = i === tasksOnDate.length - 1;
+        if (perEven !== undefined && isLast) alloc = missing; // take remainder after rounding adjustments
+        alloc = Math.max(0, roundQuarter(alloc));
+        if (alloc < 0.25) {
+          // Skip tiny allocations after rounding
+          continue;
+        }
+        missing = Math.max(0, roundQuarter(missing - alloc));
+
+        const id = `${date}_${(t as any).id || t.name}`
+          .replace(/[^a-zA-Z0-9_-]/g, "")
+          .slice(0, 120);
+        drafts.push({
+          id,
+          spent_date: date,
+          hours: alloc,
+          notes: `${t.name} — ${t.description || "from Monday"}`.slice(0, 255),
+          source: "monday",
+          createdAt: new Date().toISOString(),
+          status: "draft",
+        });
+      }
     }
 
     // Persist drafts for manual approval

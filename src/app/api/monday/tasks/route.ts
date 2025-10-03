@@ -159,9 +159,20 @@ export async function fetchMondayTasks(token: string) {
   }
 
   // Helper to page through ALL updates for an item
+  function stripHtml(html: string): string {
+    try {
+      return String(html || "")
+        .replace(/<[^>]*>/g, " ")
+        .replace(/\s+/g, " ")
+        .trim();
+    } catch {
+      return html;
+    }
+  }
+
   async function fetchAllUpdates(itemId: string): Promise<string[]> {
     const query = `query($id:[ID!],$limit:Int!,$page:Int!){
-      items(ids:$id){ updates(limit:$limit,page:$page){ id text_body } }
+      items(ids:$id){ updates(limit:$limit,page:$page){ id text_body body replies{ text_body } } }
     }`;
     const comments: string[] = [];
     let page = 1;
@@ -179,8 +190,15 @@ export async function fetchMondayTasks(token: string) {
       const ups = json?.data?.items?.[0]?.updates || [];
       if (!Array.isArray(ups) || ups.length === 0) break;
       for (const u of ups) {
-        const text = String(u?.text_body || "").trim();
-        if (text) comments.push(text);
+        const raw = String(u?.text_body || "").trim();
+        const html = String(u?.body || "").trim();
+        const base = raw || stripHtml(html);
+        if (base) comments.push(base);
+        const reps = Array.isArray(u?.replies) ? u.replies : [];
+        for (const r of reps) {
+          const rtext = String(r?.text_body || "").trim();
+          if (rtext) comments.push(rtext);
+        }
       }
     }
     return comments;
