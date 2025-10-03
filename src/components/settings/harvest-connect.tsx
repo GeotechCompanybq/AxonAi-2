@@ -49,6 +49,27 @@ export function HarvestConnect({ returnTo }: { returnTo?: string }) {
       const url = new URL("/api/harvest/timesheets", window.location.origin);
       url.searchParams.set("from", from);
       url.searchParams.set("to", to);
+      // Ensure uid is provided even if cookies are absent by reading from auth context or localStorage fallback
+      let uidParam: string | undefined = user?.uid || undefined;
+      if (!uidParam) {
+        try {
+          for (let i = 0; i < window.localStorage.length; i++) {
+            const key = window.localStorage.key(i) || "";
+            if (key.startsWith("firebase:authUser")) {
+              const raw = window.localStorage.getItem(key);
+              if (!raw) continue;
+              try {
+                const obj = JSON.parse(raw);
+                if (obj?.uid) {
+                  uidParam = String(obj.uid);
+                  break;
+                }
+              } catch {}
+            }
+          }
+        } catch {}
+      }
+      if (uidParam) url.searchParams.set("uid", uidParam);
       const res = await fetch(url.toString());
       const json = await res.json();
       if (!res.ok)

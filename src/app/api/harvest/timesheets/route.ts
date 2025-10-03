@@ -100,10 +100,11 @@ export async function GET(req: NextRequest) {
     params.set("per_page", "100");
 
     const uid = req.nextUrl.searchParams.get("uid") || undefined;
+    const doSync = req.nextUrl.searchParams.get("sync") === "1";
     if (!fetchAll) {
       const data = await fetchHarvestTimeEntriesPage(token, accountId, params);
       const list = data?.time_entries || [];
-      if (uid) {
+      if (uid && doSync) {
         try {
           const { adminDb } = await import("@/lib/firebase-admin");
           const col = adminDb
@@ -149,7 +150,7 @@ export async function GET(req: NextRequest) {
       page = Number(nextPage);
     }
 
-    if (uid) {
+    if (uid && doSync) {
       try {
         const { adminDb } = await import("@/lib/firebase-admin");
         const col = adminDb

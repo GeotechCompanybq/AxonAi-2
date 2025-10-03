@@ -258,6 +258,7 @@ export async function GET(req: NextRequest) {
     let token = cookieStore.get("monday_token")?.value;
     // Optionally scope to a user id for storing tasks
     const uid = req.nextUrl.searchParams.get("uid") || undefined;
+    const doSync = req.nextUrl.searchParams.get("sync") === "1";
     if (!token) {
       // Attempt DB lookup using uid passed via query
       if (uid) {
@@ -271,8 +272,8 @@ export async function GET(req: NextRequest) {
     if (!token)
       return NextResponse.json({ error: "Not connected" }, { status: 400 });
     const tasks = await fetchMondayTasks(token);
-    // Upsert tasks into Firestore if uid provided
-    if (uid) {
+    // Upsert tasks into Firestore if uid provided and sync requested
+    if (uid && doSync) {
       try {
         const { adminDb } = await import("@/lib/firebase-admin");
         const col = adminDb.collection("users").doc(uid).collection("tasks");

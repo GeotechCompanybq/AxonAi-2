@@ -42,7 +42,11 @@ export function MondayConnect({ returnTo }: { returnTo?: string }) {
     setIsLoading(true);
     setStatus(null);
     try {
-      const tasksRes = await fetch(`/api/monday/tasks`);
+      // Fetch fast (no Firestore write)
+      const fastUrl = new URL(`/api/monday/tasks`, window.location.origin);
+      fastUrl.searchParams.set("sync", "0");
+      if (user?.uid) fastUrl.searchParams.set("uid", user.uid);
+      const tasksRes = await fetch(fastUrl.toString());
       const tasksJson = await tasksRes.json();
       if (!tasksRes.ok) throw new Error(tasksJson.error || "not_connected");
       // Normalize and persist tasks so Tasks page shows them
@@ -135,6 +139,14 @@ export function MondayConnect({ returnTo }: { returnTo?: string }) {
       setStatus(
         `Imported ${normalizedTasks.length} tasks. Day plan and analytics generated. Check your Tasks and Analytics pages.`
       );
+
+      // Kick off background Firestore sync (non-blocking)
+      try {
+        const syncUrl = new URL(`/api/monday/tasks`, window.location.origin);
+        syncUrl.searchParams.set("sync", "1");
+        if (user?.uid) syncUrl.searchParams.set("uid", user.uid);
+        void fetch(syncUrl.toString());
+      } catch {}
     } catch (e: any) {
       setStatus(e.message || "Failed to fetch tasks or plan");
     } finally {

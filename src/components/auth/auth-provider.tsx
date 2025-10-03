@@ -156,42 +156,20 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   );
 
   const signInWithGoogle = useCallback(async () => {
+    // Use popup by default for zero-cost local dev; fallback to redirect if popup is blocked.
     setIsLoading(true);
     const provider = new GoogleAuthProvider();
-    const isMobile =
-      typeof window !== "undefined" ? window.innerWidth < 768 : false;
-
-    // Detect if sessionStorage is usable (iOS private mode may block it)
-    const canUseSessionStorage = (() => {
-      if (typeof window === "undefined") return false;
-      try {
-        const key = "__ss_test__";
-        window.sessionStorage.setItem(key, "1");
-        window.sessionStorage.removeItem(key);
-        return true;
-      } catch {
-        return false;
-      }
-    })();
-
     try {
-      // Prefer redirect only when sessionStorage is available
-      if (isMobile && canUseSessionStorage) {
-        await signInWithRedirect(auth, provider);
-        return; // page will redirect; leave loading true
-      }
-
-      // Otherwise use popup (works in iOS private if triggered by a user gesture)
       const userCredential = await signInWithPopup(auth, provider);
       handleAuthSuccess(userCredential.user);
     } catch (err: any) {
-      // If popup was blocked, try redirect only if sessionStorage works
-      if (err?.code === "auth/popup-blocked" && canUseSessionStorage) {
+      try {
         await signInWithRedirect(auth, provider);
-        return;
+        return; // complete via getRedirectResult on return
+      } catch {
+        setIsLoading(false);
+        throw err;
       }
-      setIsLoading(false);
-      throw err;
     }
     setIsLoading(false);
   }, [router]);

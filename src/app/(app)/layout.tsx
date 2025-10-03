@@ -36,6 +36,12 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
       <AppSidebar />
       <SidebarInset className="flex flex-col min-h-screen ai-grid-bg">
         <AppHeader />
+        {/* Expose uid globally for API routes that need uid query param */}
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `window.__AXON_UID__ = ${JSON.stringify(user.uid)};`,
+          }}
+        />
         <main
           className="flex-1 p-4 md:p-8 overflow-auto pb-28 md:pb-8"
           style={{

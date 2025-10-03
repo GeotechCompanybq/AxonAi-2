@@ -41,6 +41,26 @@ export default function TimesheetsPage() {
   const [optimizing, setOptimizing] = useState(false);
   const [autoFixing, setAutoFixing] = useState(false);
   const [drafts, setDrafts] = useState<any[] | null>(null);
+  function readFirebaseAuthUid(): string | undefined {
+    try {
+      // Prefer global first
+      const globalUid = (window as any)?.__AXON_UID__;
+      if (globalUid) return String(globalUid);
+      // Fallback: scan localStorage for Firebase auth user entry
+      for (let i = 0; i < window.localStorage.length; i++) {
+        const key = window.localStorage.key(i) || "";
+        if (key.startsWith("firebase:authUser")) {
+          const raw = window.localStorage.getItem(key);
+          if (!raw) continue;
+          try {
+            const obj = JSON.parse(raw);
+            if (obj?.uid) return String(obj.uid);
+          } catch {}
+        }
+      }
+    } catch {}
+    return undefined;
+  }
   const [range, setRange] = useState<
     "day" | "week" | "month" | "all" | "custom"
   >("all");
@@ -77,7 +97,7 @@ export default function TimesheetsPage() {
 
   // Live subscribe to user's local draft timesheets if uid is present on window
   useEffect(() => {
-    const uid = (window as any)?.__AXON_UID__ || undefined;
+    const uid = readFirebaseAuthUid();
     if (!uid) return;
     const col = collection(db as any, "users", uid, "timesheetDrafts");
     const q = query(col, orderBy("spent_date", "asc"));
@@ -98,7 +118,7 @@ export default function TimesheetsPage() {
     setError(null);
     try {
       const url = new URL("/api/harvest/timesheets", window.location.origin);
-      const uid = (window as any)?.__AXON_UID__;
+      const uid = readFirebaseAuthUid();
       const r = computeRange();
       if ("all" in r && r.all) {
         url.searchParams.set("all", "1");
@@ -108,6 +128,8 @@ export default function TimesheetsPage() {
       }
       url.searchParams.set("per_page", "100");
       if (uid) url.searchParams.set("uid", String(uid));
+      // Defer Firestore sync: fetch fast, then let server sync in background when explicitly requested
+      url.searchParams.set("sync", "0");
       const res = await fetch(url.toString(), { cache: "no-store" });
       const json = await res.json();
       if (!res.ok)
@@ -116,6 +138,13 @@ export default function TimesheetsPage() {
       setEntries(list);
       // Auto-fix any non-quarter-hour entries in background
       void autoFixNonQuarter(list);
+
+      // Kick off background sync (non-blocking)
+      try {
+        const syncUrl = new URL(url.toString());
+        syncUrl.searchParams.set("sync", "1");
+        void fetch(syncUrl.toString());
+      } catch {}
     } catch (e: any) {
       setError(e?.message || "Failed to load time entries");
     } finally {
@@ -169,7 +198,13 @@ export default function TimesheetsPage() {
       for (const e of offenders) {
         const target = snapToQuarterHour(Number(e.hours));
         try {
-          const res = await fetch(`/api/harvest/timesheets/${e.id}`, {
+          const uid = readFirebaseAuthUid();
+          const url = new URL(
+            `/api/harvest/timesheets/${e.id}`,
+            window.location.origin
+          );
+          if (uid) url.searchParams.set("uid", uid);
+          const res = await fetch(url.toString(), {
             method: "PATCH",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ hours: target }),
@@ -202,9 +237,13 @@ export default function TimesheetsPage() {
     setDeletingId(id);
     setError(null);
     try {
-      const res = await fetch(`/api/harvest/timesheets/${id}`, {
-        method: "DELETE",
-      });
+      const uid = readFirebaseAuthUid();
+      const url = new URL(
+        `/api/harvest/timesheets/${id}`,
+        window.location.origin
+      );
+      if (uid) url.searchParams.set("uid", uid);
+      const res = await fetch(url.toString(), { method: "DELETE" });
       if (!res.ok) {
         let message = "Delete failed";
         try {
@@ -292,7 +331,13 @@ export default function TimesheetsPage() {
           throw new Error("Hours must be 0:15, 0:30, 0:45, 1:00, etc.");
         payload.hours = snapped;
       }
-      const res = await fetch(`/api/harvest/timesheets/${editingId}`, {
+      const uid = readFirebaseAuthUid();
+      const url = new URL(
+        `/api/harvest/timesheets/${editingId}`,
+        window.location.origin
+      );
+      if (uid) url.searchParams.set("uid", uid);
+      const res = await fetch(url.toString(), {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
