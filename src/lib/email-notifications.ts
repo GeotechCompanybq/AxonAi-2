@@ -109,6 +109,16 @@ export class EmailNotificationService {
   ): string {
     const currentDate = format(new Date(), "MMMM dd, yyyy");
 
+    function resolveLogoUrl(): string | null {
+      const explicit = process.env.AXON_LOGO_URL;
+      if (explicit && explicit.trim().length > 0) return explicit.trim();
+      const base =
+        (process.env.NEXT_PUBLIC_APP_URL || "").trim() ||
+        (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : "");
+      if (base) return `${base.replace(/\/$/, "")}/axon-logo.png`;
+      return "/axon-logo.png";
+    }
+
     function frame(
       content: string,
       opts?: {
@@ -123,14 +133,18 @@ export class EmailNotificationService {
         opts?.ctaHref && opts?.ctaText
           ? `<div style=\"text-align:center;margin-top:24px\"><a href=\"${opts.ctaHref}\" style=\"background:${accent};color:white;padding:12px 18px;border-radius:10px;text-decoration:none;font-weight:600\">${opts.ctaText}</a></div>`
           : "";
+      const logo = resolveLogoUrl();
       return `
         <div style="background:#0b1220;padding:24px 0;margin:0">
           <div style="max-width:640px;margin:0 auto;background:#0f172a;border:1px solid #1f2a44;border-radius:16px;overflow:hidden">
             <div style="background:linear-gradient(90deg, ${accent}, #7c3aed);height:4px;width:100%"></div>
             <div style="padding:24px 24px 8px 24px">
               <div style="display:flex;align-items:center;gap:8px;color:#e2e8f0">
-                <div style="width:10px;height:10px;border-radius:50%;background:${accent}"></div>
-                <div style="font-size:18px;font-weight:700;letter-spacing:0.3px">AxonAI</div>
+                ${
+                  logo
+                    ? `<img src="${logo}" alt="AxonAI" style="height:24px;width:auto;display:block"/>`
+                    : `<div style=\"width:10px;height:10px;border-radius:50%;background:${accent}\"></div><div style=\"font-size:18px;font-weight:700;letter-spacing:0.3px\">AxonAI</div>`
+                }
               </div>
               ${
                 opts?.title

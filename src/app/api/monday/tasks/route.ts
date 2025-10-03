@@ -256,9 +256,10 @@ export async function GET(req: NextRequest) {
   try {
     const cookieStore = await cookies();
     let token = cookieStore.get("monday_token")?.value;
+    // Optionally scope to a user id for storing tasks
+    const uid = req.nextUrl.searchParams.get("uid") || undefined;
     if (!token) {
       // Attempt DB lookup using uid passed via query
-      const uid = req.nextUrl.searchParams.get("uid") || undefined;
       if (uid) {
         try {
           const { adminDb } = await import("@/lib/firebase-admin");
@@ -270,6 +271,34 @@ export async function GET(req: NextRequest) {
     if (!token)
       return NextResponse.json({ error: "Not connected" }, { status: 400 });
     const tasks = await fetchMondayTasks(token);
+    // Upsert tasks into Firestore if uid provided
+    if (uid) {
+      try {
+        const { adminDb } = await import("@/lib/firebase-admin");
+        const col = adminDb.collection("users").doc(uid).collection("tasks");
+        // Write each task by deterministic id (hash of name+dueDate)
+        for (const t of tasks) {
+          const key = `${t.name}|${t.dueDate || ""}|monday`;
+          const id = Buffer.from(key).toString("base64").replace(/=+$/g, "");
+          await col.doc(id).set(
+            {
+              source: "monday",
+              name: t.name,
+              description: t.description,
+              dueDate: t.dueDate || null,
+              priority: t.priority,
+              status: t.status,
+              category: t.category,
+              comments: t.comments || [],
+              updatedAt: new Date().toISOString(),
+            },
+            { merge: true }
+          );
+        }
+      } catch (e) {
+        console.error("Failed to upsert tasks", e);
+      }
+    }
     return NextResponse.json({ tasks });
   } catch (e) {
     console.error("monday tasks error", e);
