@@ -65,9 +65,23 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       const onAuthPages =
         pathname === "/" ||
         pathname.startsWith("/login") ||
-        pathname.startsWith("/signup");
+        pathname.startsWith("/signup") ||
+        pathname.startsWith("/org/login");
+
       if (onAuthPages) {
-        router.replace("/dashboard");
+        const stored =
+          typeof window !== "undefined"
+            ? window.sessionStorage.getItem("postLoginRedirect")
+            : null;
+        const destination =
+          stored ||
+          (pathname.startsWith("/org") ? "/org/dashboard" : "/dashboard");
+        if (stored) {
+          try {
+            window.sessionStorage.removeItem("postLoginRedirect");
+          } catch {}
+        }
+        router.replace(destination);
       }
     }
   }, [user, isLoading, pathname, router]);
@@ -80,6 +94,11 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         const result = await getRedirectResult(auth);
         if (result?.user) {
           handleAuthSuccess(result.user);
+          return;
+        }
+        // Some mobile browsers may clear redirect result but keep currentUser
+        if (auth.currentUser) {
+          handleAuthSuccess(auth.currentUser as FirebaseUserType);
         }
       } catch (e) {
         // no-op, popup flow may be used instead
@@ -94,7 +113,18 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       displayName: firebaseUser.displayName,
       photoURL: firebaseUser.photoURL,
     });
-    router.push("/dashboard");
+    const stored =
+      typeof window !== "undefined"
+        ? window.sessionStorage.getItem("postLoginRedirect")
+        : null;
+    const destination =
+      stored || (pathname.startsWith("/org") ? "/org/dashboard" : "/dashboard");
+    if (stored) {
+      try {
+        window.sessionStorage.removeItem("postLoginRedirect");
+      } catch {}
+    }
+    router.push(destination);
   };
 
   const loginWithEmail = useCallback(
@@ -130,18 +160,33 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     const provider = new GoogleAuthProvider();
     const isMobile =
       typeof window !== "undefined" ? window.innerWidth < 768 : false;
+
+    // Detect if sessionStorage is usable (iOS private mode may block it)
+    const canUseSessionStorage = (() => {
+      if (typeof window === "undefined") return false;
+      try {
+        const key = "__ss_test__";
+        window.sessionStorage.setItem(key, "1");
+        window.sessionStorage.removeItem(key);
+        return true;
+      } catch {
+        return false;
+      }
+    })();
+
     try {
-      if (isMobile) {
-        // Mobile browsers commonly block popups; use redirect
+      // Prefer redirect only when sessionStorage is available
+      if (isMobile && canUseSessionStorage) {
         await signInWithRedirect(auth, provider);
         return; // page will redirect; leave loading true
       }
 
+      // Otherwise use popup (works in iOS private if triggered by a user gesture)
       const userCredential = await signInWithPopup(auth, provider);
       handleAuthSuccess(userCredential.user);
     } catch (err: any) {
-      // Fallback to redirect if the popup was blocked
-      if (err?.code === "auth/popup-blocked") {
+      // If popup was blocked, try redirect only if sessionStorage works
+      if (err?.code === "auth/popup-blocked" && canUseSessionStorage) {
         await signInWithRedirect(auth, provider);
         return;
       }

@@ -1,4 +1,5 @@
 import * as admin from "firebase-admin";
+import "@/lib/firebase-admin"; // ensure default app is initialized
 import { format } from "date-fns";
 
 interface EmailNotificationOptions {

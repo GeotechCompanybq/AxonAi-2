@@ -26,7 +26,14 @@ import {
 import { handleAnalyzeTimeUsage } from "@/lib/actions";
 import { getTasksFromLocalStorage } from "@/lib/task-storage";
 import type { Task } from "@/types";
-import { format, parseISO } from "date-fns";
+import { format, parseISO, startOfWeek, addDays } from "date-fns";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { IconSpinner } from "@/components/icons";
 import type { AnalyzeTimeUsageOutput } from "@/ai/flows/analyze-time-usage";
 
@@ -70,39 +77,55 @@ export function TimeUsageChart() {
   const [chartData, setChartData] = useState<ChartData>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [analysisSummary, setAnalysisSummary] = useState<string | null>(null);
+  const [entries, setEntries] = useState<any[] | null>(null);
+  const [projects, setProjects] = useState<Array<{ id: string; name: string }>>(
+    []
+  );
+  const [selectedProjectId, setSelectedProjectId] = useState<string>("all");
 
   useEffect(() => {
     async function fetchData() {
       setIsLoading(true);
       const tasks = getTasksFromLocalStorage();
-      const currentDate = format(new Date(), "yyyy-MM-dd");
+      const today = new Date();
+      const weekStart = startOfWeek(today, { weekStartsOn: 1 });
+      const from = format(weekStart, "yyyy-MM-dd");
+      const to = format(addDays(weekStart, 6), "yyyy-MM-dd");
 
-      if (tasks.length === 0) {
-        const defaultData = [
-          "Mon",
-          "Tue",
-          "Wed",
-          "Thu",
-          "Fri",
-          "Sat",
-          "Sun",
-        ].map((day) => ({
-          day: day as any,
-          Study: 0,
-          Work: 0,
-          Personal: 0,
-          Chill: 1,
-          Sleep: 7,
-        }));
-        setChartData(defaultData);
-        setAnalysisSummary(
-          "No tasks available for analysis. Showing default estimates for Chill & Sleep."
-        );
-        setIsLoading(false);
-        return;
-      }
-
+      // 1) Try Harvest timesheets first (authoritative)
       try {
+        const url = new URL("/api/harvest/timesheets", window.location.origin);
+        url.searchParams.set("from", from);
+        url.searchParams.set("to", to);
+        const res = await fetch(url.toString(), { cache: "no-store" });
+        const json = await res.json();
+        if (res.ok && Array.isArray(json?.timeEntries)) {
+          // keep raw entries and projects for filtering
+          setEntries(json.timeEntries);
+          const uniqProjects = new Map<string, string>();
+          for (const e of json.timeEntries) {
+            const id = String(e?.project?.id ?? "");
+            const name = String(e?.project?.name ?? "");
+            if (id && name) uniqProjects.set(id, name);
+          }
+          setProjects(
+            Array.from(uniqProjects.entries()).map(([id, name]) => ({
+              id,
+              name,
+            }))
+          );
+          // compute initial chart for all projects
+          const weekly = computeWeeklyFromEntries(json.timeEntries);
+          setChartData(weekly);
+          setAnalysisSummary("Weekly time usage based on Harvest timesheets.");
+          setIsLoading(false);
+          return;
+        }
+      } catch {}
+
+      // 2) Fallback to AI estimation from tasks
+      try {
+        const currentDate = format(today, "yyyy-MM-dd");
         const aiTasks = tasks.map((task) => ({
           name: task.name,
           description: task.description,
@@ -111,6 +134,28 @@ export function TimeUsageChart() {
           status: task.status,
           category: task.category,
         }));
+        if (aiTasks.length === 0) {
+          const defaultData = [
+            "Mon",
+            "Tue",
+            "Wed",
+            "Thu",
+            "Fri",
+            "Sat",
+            "Sun",
+          ].map((day) => ({
+            day: day as any,
+            Study: 0,
+            Work: 0,
+            Personal: 0,
+            Chill: 1,
+            Sleep: 7,
+          }));
+          setChartData(defaultData);
+          setAnalysisSummary("No tasks available. Showing default estimates.");
+          setIsLoading(false);
+          return;
+        }
 
         const result: AnalyzeTimeUsageOutput = await handleAnalyzeTimeUsage({
           tasks: aiTasks,
@@ -122,7 +167,6 @@ export function TimeUsageChart() {
         );
       } catch (error) {
         console.error("Error fetching time usage analysis:", error);
-        // Fallback to mock data structure on error
         const fallbackData = [
           "Mon",
           "Tue",
@@ -141,7 +185,7 @@ export function TimeUsageChart() {
         }));
         setChartData(fallbackData);
         setAnalysisSummary(
-          "Could not analyze time usage. Displaying default estimates."
+          "Could not analyze time usage. Displaying defaults."
         );
       } finally {
         setIsLoading(false);
@@ -150,16 +194,145 @@ export function TimeUsageChart() {
     fetchData();
   }, []);
 
+  // Recompute when project filter changes on client-side entries
+  useEffect(() => {
+    if (!entries) return;
+    setIsLoading(true);
+    const filtered =
+      selectedProjectId === "all"
+        ? entries
+        : entries.filter((e) => String(e?.project?.id) === selectedProjectId);
+    const weekly = computeWeeklyFromEntries(filtered);
+    setChartData(weekly);
+    const projName =
+      selectedProjectId === "all"
+        ? "All Projects"
+        : projects.find((p) => p.id === selectedProjectId)?.name || "Project";
+    setAnalysisSummary(`Weekly time usage from Harvest · ${projName}`);
+    setIsLoading(false);
+  }, [selectedProjectId]);
+
+  function computeWeeklyFromEntries(raw: any[]): ChartData {
+    const perDay: Record<string, number> = {
+      Mon: 0,
+      Tue: 0,
+      Wed: 0,
+      Thu: 0,
+      Fri: 0,
+      Sat: 0,
+      Sun: 0,
+    };
+    for (const e of raw) {
+      const dateStr: string | undefined = e?.spent_date;
+      const hours: number = Number(e?.hours) || 0;
+      if (!dateStr || hours <= 0) continue;
+      const d = parseISO(dateStr);
+      const idx = d.getDay();
+      const key = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"][idx];
+      const norm = (key === "Sun" ? "Sun" : key) as
+        | "Mon"
+        | "Tue"
+        | "Wed"
+        | "Thu"
+        | "Fri"
+        | "Sat"
+        | "Sun";
+      perDay[norm] = (perDay[norm] || 0) + hours;
+    }
+    return [
+      {
+        day: "Mon",
+        Study: 0,
+        Work: perDay.Mon || 0,
+        Personal: 0,
+        Chill: 1,
+        Sleep: 7,
+      },
+      {
+        day: "Tue",
+        Study: 0,
+        Work: perDay.Tue || 0,
+        Personal: 0,
+        Chill: 1,
+        Sleep: 7,
+      },
+      {
+        day: "Wed",
+        Study: 0,
+        Work: perDay.Wed || 0,
+        Personal: 0,
+        Chill: 1,
+        Sleep: 7,
+      },
+      {
+        day: "Thu",
+        Study: 0,
+        Work: perDay.Thu || 0,
+        Personal: 0,
+        Chill: 1,
+        Sleep: 7,
+      },
+      {
+        day: "Fri",
+        Study: 0,
+        Work: perDay.Fri || 0,
+        Personal: 0,
+        Chill: 1,
+        Sleep: 7,
+      },
+      {
+        day: "Sat",
+        Study: 0,
+        Work: perDay.Sat || 0,
+        Personal: 0,
+        Chill: 1,
+        Sleep: 7,
+      },
+      {
+        day: "Sun",
+        Study: 0,
+        Work: perDay.Sun || 0,
+        Personal: 0,
+        Chill: 1,
+        Sleep: 7,
+      },
+    ];
+  }
+
   return (
     <Card className="h-full flex flex-col">
       <CardHeader>
-        <CardTitle>AI-Estimated Weekly Time Usage</CardTitle>
-        <CardDescription>
-          {isLoading
-            ? "AI is analyzing your time usage..."
-            : analysisSummary ||
-              "How your time might be spent across activities (in hours)."}
-        </CardDescription>
+        <div className="flex items-center justify-between gap-3">
+          <div>
+            <CardTitle>AI-Estimated Weekly Time Usage</CardTitle>
+            <CardDescription>
+              {isLoading
+                ? "Analyzing your time usage..."
+                : analysisSummary ||
+                  "How your time might be spent across activities (in hours)."}
+            </CardDescription>
+          </div>
+          {projects.length > 0 && (
+            <div className="w-56">
+              <Select
+                value={selectedProjectId}
+                onValueChange={(v) => setSelectedProjectId(v)}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="All Projects" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Projects</SelectItem>
+                  {projects.map((p) => (
+                    <SelectItem key={p.id} value={p.id}>
+                      {p.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          )}
+        </div>
       </CardHeader>
       <CardContent className="flex-1 pb-0 flex items-center justify-center">
         {isLoading ? (

@@ -35,7 +35,22 @@ const riskConfig = {
     icon: <AlertTriangle className="h-5 w-5 text-red-500" />,
     progressColorClass: "bg-red-500",
   },
-};
+} as const;
+
+function normalizeRiskLevel(level?: string): keyof typeof riskConfig {
+  const s = (level || "").toLowerCase();
+  if (s.startsWith("low")) return "low";
+  if (s.startsWith("med") || s === "moderate") return "medium";
+  if (
+    s.startsWith("high") ||
+    s === "severe" ||
+    s === "very_high" ||
+    s === "very-high" ||
+    s === "critical"
+  )
+    return "high";
+  return "medium";
+}
 
 export function BurnoutPredictor() {
   const { user } = useAuth();
@@ -105,9 +120,8 @@ export function BurnoutPredictor() {
     fetchData();
   }, [user]);
 
-  const currentConfig = burnoutData
-    ? riskConfig[burnoutData.riskLevel]
-    : riskConfig.medium; // Default to medium if data not loaded
+  const riskKey = normalizeRiskLevel(burnoutData?.riskLevel);
+  const currentConfig = riskConfig[riskKey];
   const progressValue = burnoutData ? burnoutData.progressValue : 50;
   const message = burnoutData
     ? burnoutData.message

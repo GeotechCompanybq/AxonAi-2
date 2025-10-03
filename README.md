@@ -82,7 +82,7 @@ This project is licensed under the [MIT License](LICENSE).
 
 ## 🏆 Acknowledgements & Ownership
 
-This project, dey Weaver, is envisioned, developed, and maintained by **Geotechcompany Singh ([@Geotechcompany6673](https://github.com/Geotechcompany6673))**. All credit for the concept and core development goes to him.
+This project,Axon Ai, is envisioned, developed, and maintained by **Geotechcompany Singh ([@Geotechcompany6673](https://github.com/Geotechcompany6673))**. All credit for the concept and core development goes to him.
 
 A big thank you to the open-source community for the tools and libraries that make projects like this possible!
 

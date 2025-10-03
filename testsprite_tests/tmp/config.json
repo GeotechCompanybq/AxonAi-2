@@ -1,0 +1,18 @@
+{
+  "status": "commited",
+  "type": "frontend",
+  "scope": "codebase",
+  "localEndpoint": "http://localhost:9002",
+  "loginUser": "geoffreyaudia9@gmail.com",
+  "loginPassword": "@Locamade12182",
+  "executionArgs": {
+    "projectName": "AxonAi",
+    "projectPath": "C:\\xampp\\htdocs\\GEOTECHCOMPANY\\Axon\\AxonAi",
+    "testIds": [],
+    "additionalInstruction": "",
+    "envs": {
+      "API_KEY": "sk-user-EWyOj9mAS2_-MiMD-OU8m86pzoSUsC2HlW6GU6GsBepStB6gNkHp9anwyGGkGtCHdl9HGPCoSiSJGTkXACOeYtMmonRjXyzf60l5lL8w17ckZMrawsvMrHSWXB1PlsxU6cc"
+    }
+  },
+  "proxy": "http://a23a2d9a-9232-4c91-a912-a46ace9979bb:Xaf2BGrhUDO9MN0VHcSaa4zk2jPaztdd@tun.testsprite.com:8080"
+}

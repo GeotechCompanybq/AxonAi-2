@@ -17,7 +17,7 @@ export default function HelpPage() {
         <CardHeader>
           <CardTitle className="text-3xl font-bold">Help & Support</CardTitle>
           <CardDescription className="text-lg">
-            Get assistance with Dey Weaver.
+            Get assistance withAxon Ai.
           </CardDescription>
         </CardHeader>
       </Card>

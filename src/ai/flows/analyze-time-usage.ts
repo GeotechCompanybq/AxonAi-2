@@ -1,5 +1,4 @@
-
-'use server';
+"use server";
 /**
  * @fileOverview Analyzes task data to estimate time usage across different categories for a weekly view.
  *
@@ -8,49 +7,86 @@
  * - AnalyzeTimeUsageOutput - The return type for the analyzeTimeUsage function.
  */
 
-import {ai} from '@/ai/genkit';
-import {z} from 'genkit';
-import { format, parseISO, getDay, startOfWeek, addDays } from 'date-fns';
+import { ai } from "@/ai/genkit";
+import { z } from "genkit";
+import { format, parseISO } from "date-fns";
 
 // Simplified Task structure for AI input
 const AITaskSchema = z.object({
   name: z.string(),
   description: z.string().optional(),
-  dueDate: z.string().optional().describe('Task due date in ISO string format, e.g., YYYY-MM-DDTHH:mm:ss.sssZ'),
-  priority: z.enum(['low', 'medium', 'high']).optional(),
-  status: z.enum(['todo', 'inprogress', 'done', 'blocked']),
-  category: z.string().optional().describe('User-defined category, e.g., Work, Study, Personal'),
+  dueDate: z
+    .string()
+    .optional()
+    .describe(
+      "Task due date in ISO string format, e.g., YYYY-MM-DDTHH:mm:ss.sssZ"
+    ),
+  priority: z.enum(["low", "medium", "high"]).optional(),
+  status: z.enum(["todo", "inprogress", "done", "blocked"]),
+  category: z
+    .string()
+    .optional()
+    .describe("User-defined category, e.g., Work, Study, Personal"),
 });
 
 const AnalyzeTimeUsageInputSchema = z.object({
-  tasks: z.array(AITaskSchema).describe('A list of tasks for analysis.'),
-  currentDate: z.string().describe('The current date in YYYY-MM-DD format, to help determine the relevant week for analysis.')
+  tasks: z.array(AITaskSchema).describe("A list of tasks for analysis."),
+  currentDate: z
+    .string()
+    .describe(
+      "The current date in YYYY-MM-DD format, to help determine the relevant week for analysis."
+    ),
 });
 export type AnalyzeTimeUsageInput = z.infer<typeof AnalyzeTimeUsageInputSchema>;
 
 const DailyTimeUsageSchema = z.object({
-  day: z.enum(['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']),
-  Study: z.number().default(0).describe('Estimated hours spent on Study.'),
-  Work: z.number().default(0).describe('Estimated hours spent on Work.'),
-  Personal: z.number().default(0).describe('Estimated hours spent on Personal tasks/activities.'),
-  Chill: z.number().default(0).describe('Estimated hours spent on Chill/Relaxation. This may be an assumption if not directly inferable from tasks.'),
-  Sleep: z.number().default(0).describe('Estimated hours spent on Sleep. This may be an assumption if not directly inferable from tasks.'),
+  day: z.enum(["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]),
+  Study: z.number().default(0).describe("Estimated hours spent on Study."),
+  Work: z.number().default(0).describe("Estimated hours spent on Work."),
+  Personal: z
+    .number()
+    .default(0)
+    .describe("Estimated hours spent on Personal tasks/activities."),
+  Chill: z
+    .number()
+    .default(0)
+    .describe(
+      "Estimated hours spent on Chill/Relaxation. This may be an assumption if not directly inferable from tasks."
+    ),
+  Sleep: z
+    .number()
+    .default(0)
+    .describe(
+      "Estimated hours spent on Sleep. This may be an assumption if not directly inferable from tasks."
+    ),
 });
 
 const AnalyzeTimeUsageOutputSchema = z.object({
-  weeklyUsage: z.array(DailyTimeUsageSchema).length(7).describe('An array of 7 objects, one for each day of the week (Mon-Sun), showing estimated time usage.'),
-  analysisSummary: z.string().optional().describe('A brief summary or any assumptions made during the analysis.'),
+  weeklyUsage: z
+    .array(DailyTimeUsageSchema)
+    .length(7)
+    .describe(
+      "An array of 7 objects, one for each day of the week (Mon-Sun), showing estimated time usage."
+    ),
+  analysisSummary: z
+    .string()
+    .optional()
+    .describe("A brief summary or any assumptions made during the analysis."),
 });
-export type AnalyzeTimeUsageOutput = z.infer<typeof AnalyzeTimeUsageOutputSchema>;
+export type AnalyzeTimeUsageOutput = z.infer<
+  typeof AnalyzeTimeUsageOutputSchema
+>;
 
-export async function analyzeTimeUsage(input: AnalyzeTimeUsageInput): Promise<AnalyzeTimeUsageOutput> {
+export async function analyzeTimeUsage(
+  input: AnalyzeTimeUsageInput
+): Promise<AnalyzeTimeUsageOutput> {
   return analyzeTimeUsageFlow(input);
 }
 
 const analyzeTimeUsagePrompt = ai.definePrompt({
-  name: 'analyzeTimeUsagePrompt',
-  input: {schema: AnalyzeTimeUsageInputSchema},
-  output: {schema: AnalyzeTimeUsageOutputSchema},
+  name: "analyzeTimeUsagePrompt",
+  input: { schema: AnalyzeTimeUsageInputSchema },
+  output: { schema: AnalyzeTimeUsageOutputSchema },
   prompt: `You are an AI assistant that analyzes a list of tasks to estimate weekly time usage.
 The user will provide a list of tasks and the current date. Analyze tasks for the week (Monday to Sunday) that includes the 'currentDate'.
 
@@ -91,7 +127,7 @@ The order of days in the 'weeklyUsage' array should be Mon, Tue, Wed, Thu, Fri, 
 
 const analyzeTimeUsageFlow = ai.defineFlow(
   {
-    name: 'analyzeTimeUsageFlow',
+    name: "analyzeTimeUsageFlow",
     inputSchema: AnalyzeTimeUsageInputSchema,
     outputSchema: AnalyzeTimeUsageOutputSchema,
   },
@@ -100,35 +136,18 @@ const analyzeTimeUsageFlow = ai.defineFlow(
     // This is not directly used by Handlebars in this version but good for other contexts.
     const formattedInput = {
       ...input,
-      tasks: input.tasks.map(task => ({
+      tasks: input.tasks.map((task) => ({
         ...task,
         // @ts-ignore
-        formatISO: (dateString?: string) => dateString ? format(parseISO(dateString), 'yyyy-MM-dd HH:mm') : 'N/A'
-      }))
+        formatISO: (dateString?: string) =>
+          dateString ? format(parseISO(dateString), "yyyy-MM-dd HH:mm") : "N/A",
+      })),
     };
 
-    const {output} = await analyzeTimeUsagePrompt(formattedInput);
+    const { output } = await analyzeTimeUsagePrompt(formattedInput);
     if (!output) {
-      // Fallback if AI returns nothing, ensure 7 days structure
-      const today = input.currentDate ? parseISO(input.currentDate) : new Date();
-      const weekStart = startOfWeek(today, { weekStartsOn: 1 }); // Monday
-      const days = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'] as const;
-      const fallbackWeeklyUsage = days.map(day => ({
-        day: day, Study: 0, Work: 0, Personal: 0, Chill: 2, Sleep: 8
-      }));
-      return { weeklyUsage: fallbackWeeklyUsage, analysisSummary: "AI analysis failed, showing default estimates." };
+      throw new Error("AI analysis returned no output");
     }
-     // Ensure the output always has 7 days in the correct order, even if AI misses some
-    const daysOfWeek = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'] as const;
-    const completeWeeklyUsage = daysOfWeek.map(dayName => {
-      const foundDay = output.weeklyUsage.find(d => d.day === dayName);
-      if (foundDay) return foundDay;
-      return { day: dayName, Study: 0, Work: 0, Personal: 0, Chill: Math.floor(Math.random()*2)+1, Sleep: Math.floor(Math.random()*2)+7 }; // Default if AI missed a day
-    });
-
-
-    return { ...output, weeklyUsage: completeWeeklyUsage };
+    return output;
   }
 );
-
-    

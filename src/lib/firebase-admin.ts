@@ -1,16 +1,29 @@
-import * as admin from "firebase-admin";
+import {
+  getApps,
+  getApp,
+  initializeApp,
+  cert,
+  applicationDefault,
+  type App as AdminApp,
+} from "firebase-admin/app";
+import { getAuth } from "firebase-admin/auth";
+import { getFirestore, FieldValue } from "firebase-admin/firestore";
 
-let app: admin.app.App | null = null;
+let app: AdminApp;
 
-function buildServiceAccountFromEnv(): admin.ServiceAccount | undefined {
-  // Prefer FIREBASE_SERVICE_ACCOUNT as JSON
+function buildServiceAccountFromEnv():
+  | { projectId: string; clientEmail: string; privateKey: string }
+  | undefined {
   const raw = process.env.FIREBASE_SERVICE_ACCOUNT;
   if (raw && raw.length > 0) {
     try {
-      return JSON.parse(raw);
-    } catch {
-      // fall through to split env vars
-    }
+      const parsed = JSON.parse(raw);
+      return {
+        projectId: parsed.projectId,
+        clientEmail: parsed.clientEmail,
+        privateKey: String(parsed.privateKey || "").replace(/\\n/g, "\n"),
+      };
+    } catch {}
   }
   const projectId = process.env.FIREBASE_PROJECT_ID;
   const clientEmail = process.env.FIREBASE_CLIENT_EMAIL;
@@ -19,26 +32,26 @@ function buildServiceAccountFromEnv(): admin.ServiceAccount | undefined {
     ? privateKeyRaw.replace(/\\n/g, "\n")
     : undefined;
   if (projectId && clientEmail && privateKey) {
-    return { projectId, clientEmail, privateKey } as admin.ServiceAccount;
+    return { projectId, clientEmail, privateKey };
   }
   return undefined;
 }
 
-if (!admin.apps.length) {
+if (getApps().length === 0) {
   const sa = buildServiceAccountFromEnv();
   try {
-    app = admin.initializeApp(
-      sa
-        ? { credential: admin.credential.cert(sa) }
-        : { credential: admin.credential.applicationDefault() }
-    );
-  } catch {
-    // As a last resort, try initializing without explicit credentials to avoid build-time crashes
-    app = admin.initializeApp();
+    app = sa
+      ? initializeApp({ credential: cert(sa) })
+      : initializeApp({ credential: applicationDefault() });
+  } catch (e) {
+    // Surface init errors clearly in dev
+    console.error("Firebase Admin init error", e);
+    throw e;
   }
 } else {
-  app = admin.app();
+  app = getApp();
 }
 
-export const adminDb = admin.firestore();
-export const adminFieldValue = admin.firestore.FieldValue;
+export const adminDb = getFirestore(app);
+export const adminFieldValue = FieldValue;
+export const adminAuth = getAuth(app);

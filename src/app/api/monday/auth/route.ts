@@ -9,7 +9,13 @@ export async function GET(req: NextRequest) {
   const redirectUri = process.env.MONDAY_REDIRECT_URI || computedRedirectUri;
   const scope = process.env.MONDAY_SCOPES || "me:read boards:read users:read";
   const uid = req.nextUrl.searchParams.get("uid") || undefined;
-  const state = uid ? `uid:${uid}` : "monday_oauth_state";
+  const returnTo = req.nextUrl.searchParams.get("returnTo") || undefined;
+  const stateParts = [
+    uid ? `uid:${uid}` : null,
+    returnTo ? `ret:${returnTo}` : null,
+  ].filter(Boolean);
+  const state =
+    stateParts.length > 0 ? stateParts.join("|") : "monday_oauth_state";
   if (!clientId) {
     return NextResponse.json(
       { error: "Missing MONDAY_CLIENT_ID" },

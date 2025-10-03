@@ -8,6 +8,7 @@ import {
 import { ThemeToggleSwitch } from "@/components/settings/theme-toggle-switch";
 import { MondayConnect } from "@/components/settings/monday-connect";
 import { JiraConnect } from "@/components/settings/jira-connect";
+import { HarvestConnect } from "@/components/settings/harvest-connect";
 
 export default function SettingsPage() {
   return (
@@ -35,6 +36,7 @@ export default function SettingsPage() {
 
       <MondayConnect />
       <JiraConnect />
+      <HarvestConnect returnTo="/settings" />
     </div>
   );
 }

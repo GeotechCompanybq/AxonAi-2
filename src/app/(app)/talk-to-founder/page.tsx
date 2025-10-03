@@ -20,7 +20,7 @@ export default function TalkToFounderPage() {
             Talk to the Founder
           </CardTitle>
           <CardDescription className="text-lg">
-            Share your thoughts and help shape Dey Weaver.
+            Share your thoughts and help shapeAxon Ai.
           </CardDescription>
         </CardHeader>
       </Card>

@@ -1,4 +1,4 @@
-# **App Name**: Dey Weaver
+# **App Name**:Axon Ai
 
 ## Core Features:
 
@@ -13,7 +13,7 @@
 
 - Primary color: HSL(48, 85%, 50%) translated to a vivid gold (#F0C200), embodying productivity and value.
 - Background color: Desaturated gold, HSL(48, 20%, 90%), which converts to (#E8E6D8) provides a warm and calming backdrop to keep stress at bay.
-- Accent color: Analogous hue toward orange; HSL(18, 75%, 55%), or  (#F28500), to make key CTAs and information pop.
+- Accent color: Analogous hue toward orange; HSL(18, 75%, 55%), or (#F28500), to make key CTAs and information pop.
 - Clean and readable font for a professional look that helps user stay calm while looking at a busy schedule.
 - Visually decluttered to display prioritized data. Card-based design to allow easy access and clear understanding of tasks.
 - Consistent use of flat design icons for easy identification of calendar and to-do elements.

@@ -8,7 +8,7 @@ import { useAuth } from "@/hooks/use-auth";
 import type { Task, TaskStatus } from "@/types";
 import { saveTasksToLocalStorage } from "@/lib/task-storage";
 
-export function MondayConnect() {
+export function MondayConnect({ returnTo }: { returnTo?: string }) {
   const { user } = useAuth();
   const [isLoading, setIsLoading] = useState(false);
   const [status, setStatus] = useState<string | null>(null);
@@ -33,8 +33,9 @@ export function MondayConnect() {
   const connect = useCallback(async () => {
     const url = new URL("/api/monday/auth", window.location.origin);
     if (user?.uid) url.searchParams.set("uid", user.uid);
+    if (returnTo) url.searchParams.set("returnTo", returnTo);
     window.location.href = url.toString();
-  }, [user]);
+  }, [user, returnTo]);
 
   const pullAndPlan = useCallback(async () => {
     if (!user) return;

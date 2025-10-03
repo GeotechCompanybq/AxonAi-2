@@ -6,7 +6,14 @@ export async function GET(req: NextRequest) {
     const { searchParams } = new URL(req.url);
     const code = searchParams.get("code");
     const state = searchParams.get("state") || undefined;
-    const uid = state?.startsWith("uid:") ? state.slice(4) : undefined;
+    const uid = state
+      ?.split("|")
+      ?.find((s) => s.startsWith("uid:"))
+      ?.slice(4);
+    const ret = state
+      ?.split("|")
+      ?.find((s) => s.startsWith("ret:"))
+      ?.slice(4);
     if (!code)
       return NextResponse.json({ error: "Missing code" }, { status: 400 });
 
@@ -73,7 +80,7 @@ export async function GET(req: NextRequest) {
       }
     }
 
-    const dashboard = new URL("/settings", req.nextUrl.origin);
+    const dashboard = new URL(ret || "/settings", req.nextUrl.origin);
     return NextResponse.redirect(dashboard);
   } catch (e) {
     console.error("monday callback error", e);

@@ -1,6 +1,7 @@
 import { ProgressPieChart } from "@/components/analytics/progress-chart";
 import { TimeUsageChart } from "@/components/analytics/time-usage-chart";
 import { EfficiencyScore } from "@/components/analytics/efficiency-score";
+import { NeededHours } from "@/components/analytics/needed-hours";
 import { BurnoutPredictor } from "@/components/analytics/burnout-predictor";
 import {
   Card,
@@ -23,9 +24,10 @@ export default function AnalyticsPage() {
         </CardHeader>
       </Card>
 
-      <div className="grid grid-cols-1 gap-4 sm:gap-6 md:grid-cols-2 lg:grid-cols-2">
+      <div className="grid grid-cols-1 gap-4 sm:gap-6 md:grid-cols-2 lg:grid-cols-3">
         <ProgressPieChart />
         <TimeUsageChart />
+        <NeededHours />
       </div>
       <div className="grid grid-cols-1 gap-4 sm:gap-6 md:grid-cols-2">
         <EfficiencyScore />

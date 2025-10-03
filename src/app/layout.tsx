@@ -29,6 +29,7 @@ export default function RootLayout({
   return (
     <html lang="en" suppressHydrationWarning className="dark">
       <body
+        suppressHydrationWarning
         className={`${SpaceGrotesk.variable} ${GeistMono.variable} font-sans antialiased`}
       >
         <ClientProviders>

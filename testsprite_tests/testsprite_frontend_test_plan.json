@@ -1,0 +1,534 @@
+[
+  {
+    "id": "TC001",
+    "title": "User Login with Valid Credentials",
+    "description": "Verify that a user can successfully log in using valid email and password credentials.",
+    "category": "functional",
+    "priority": "High",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Navigate to the login page."
+      },
+      {
+        "type": "action",
+        "description": "Enter valid email and password."
+      },
+      {
+        "type": "action",
+        "description": "Click the login button."
+      },
+      {
+        "type": "assertion",
+        "description": "Confirm user is redirected to the main app shell containing header, sidebar, and mobile tab bar."
+      },
+      {
+        "type": "assertion",
+        "description": "Verify a valid session is created and credentials are protected."
+      }
+    ]
+  },
+  {
+    "id": "TC002",
+    "title": "User Login with Invalid Credentials",
+    "description": "Verify that login fails when the user enters incorrect email or password.",
+    "category": "error handling",
+    "priority": "High",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Navigate to the login page."
+      },
+      {
+        "type": "action",
+        "description": "Enter invalid email or password."
+      },
+      {
+        "type": "action",
+        "description": "Click the login button."
+      },
+      {
+        "type": "assertion",
+        "description": "Verify login is rejected with an appropriate error message without revealing sensitive information."
+      },
+      {
+        "type": "assertion",
+        "description": "Confirm no session is created."
+      }
+    ]
+  },
+  {
+    "id": "TC003",
+    "title": "OAuth Login Flow with Jira",
+    "description": "Ensure the OAuth authentication flow with Jira completes successfully and securely.",
+    "category": "functional",
+    "priority": "High",
+    "steps": [
+      {
+        "type": "action",
+        "description": "From settings, initiate Jira OAuth login."
+      },
+      {
+        "type": "action",
+        "description": "Complete Jira authentication and authorization in the external Jira window."
+      },
+      {
+        "type": "assertion",
+        "description": "Verify user is redirected back to AxonAI with OAuth token stored securely."
+      },
+      {
+        "type": "assertion",
+        "description": "Confirm Jira integration status shows connected."
+      }
+    ]
+  },
+  {
+    "id": "TC004",
+    "title": "OAuth Login Flow with monday.com",
+    "description": "Ensure the OAuth authentication flow with monday.com completes successfully and securely.",
+    "category": "functional",
+    "priority": "High",
+    "steps": [
+      {
+        "type": "action",
+        "description": "From settings, start monday.com OAuth login."
+      },
+      {
+        "type": "action",
+        "description": "Authenticate and authorize on monday.com external window."
+      },
+      {
+        "type": "assertion",
+        "description": "Verify redirect back with OAuth token securely stored."
+      },
+      {
+        "type": "assertion",
+        "description": "Confirm monday.com integration status reflects connected."
+      }
+    ]
+  },
+  {
+    "id": "TC005",
+    "title": "Import Task List from Jira",
+    "description": "Verify tasks can be imported correctly from Jira into AxonAI task list.",
+    "category": "integration",
+    "priority": "High",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Ensure Jira integration is connected."
+      },
+      {
+        "type": "action",
+        "description": "Trigger task import from Jira."
+      },
+      {
+        "type": "assertion",
+        "description": "Validate imported tasks appear in the task list with correct details."
+      },
+      {
+        "type": "assertion",
+        "description": "Confirm no duplicates are created with repeated imports."
+      }
+    ]
+  },
+  {
+    "id": "TC006",
+    "title": "Import Task List from monday.com",
+    "description": "Verify tasks are imported correctly from monday.com to AxonAI task list.",
+    "category": "integration",
+    "priority": "High",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Confirm monday.com integration is connected."
+      },
+      {
+        "type": "action",
+        "description": "Initiate task import from monday.com."
+      },
+      {
+        "type": "assertion",
+        "description": "Imported tasks are displayed accurately with correct attributes."
+      },
+      {
+        "type": "assertion",
+        "description": "No duplicate tasks appear on repeated imports due to idempotent webhook handling."
+      }
+    ]
+  },
+  {
+    "id": "TC007",
+    "title": "Generate AI Daily Plan from Tasks Within Latency Requirements",
+    "description": "Validate AI-based daily plan generation completes within 3 seconds at 50th percentile and produces a usable plan.",
+    "category": "performance",
+    "priority": "High",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Upload a representative task list to the system."
+      },
+      {
+        "type": "action",
+        "description": "Trigger AI plan generation via API or UI."
+      },
+      {
+        "type": "assertion",
+        "description": "Measure latency; verify it is under 3 seconds at 50th percentile."
+      },
+      {
+        "type": "assertion",
+        "description": "Verify AI generated plan contains prioritized tasks with estimates."
+      }
+    ]
+  },
+  {
+    "id": "TC008",
+    "title": "Create Calendar-Aware AI Schedule without Overlaps",
+    "description": "Ensure that AI-generated schedules respect existing meetings and do not conflict with user availability.",
+    "category": "functional",
+    "priority": "High",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Provide a task list and existing calendar with meetings and busy times."
+      },
+      {
+        "type": "action",
+        "description": "Create an AI-driven schedule using the scheduling form."
+      },
+      {
+        "type": "assertion",
+        "description": "Verify scheduled tasks fit around meetings with no overlaps."
+      },
+      {
+        "type": "assertion",
+        "description": "Confirm the schedule matches user availability constraints."
+      }
+    ]
+  },
+  {
+    "id": "TC009",
+    "title": "Dynamic Reallocation After Mid-Day Interruptions",
+    "description": "Verify that the system can reallocate unfinished tasks dynamically after disruptions to optimize the remaining time.",
+    "category": "functional",
+    "priority": "Medium",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Start with an existing schedule for the day."
+      },
+      {
+        "type": "action",
+        "description": "Simulate interruption by marking some tasks incomplete or delayed."
+      },
+      {
+        "type": "action",
+        "description": "Trigger dynamic reallocation of tasks."
+      },
+      {
+        "type": "assertion",
+        "description": "Check that the schedule is adjusted to fit remaining time slots optimally."
+      },
+      {
+        "type": "assertion",
+        "description": "Ensure no conflicts with meetings or availability arise."
+      }
+    ]
+  },
+  {
+    "id": "TC010",
+    "title": "Intelligent Task Breakdown with Estimates and Priorities",
+    "description": "Verify that large tasks can be decomposed into subtasks with time estimates and priority labels.",
+    "category": "functional",
+    "priority": "Medium",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Select a large task from the task list."
+      },
+      {
+        "type": "action",
+        "description": "Invoke the task breakdown feature to generate subtasks."
+      },
+      {
+        "type": "assertion",
+        "description": "Verify subtasks have meaningful descriptions, time estimates, and priority levels."
+      },
+      {
+        "type": "assertion",
+        "description": "Subtasks are displayed correctly in the UI and can be individually managed."
+      }
+    ]
+  },
+  {
+    "id": "TC011",
+    "title": "Calendar Visualization Displays Time Blocks and Events",
+    "description": "Verify that the calendar view shows scheduled tasks and existing events accurately and is responsive.",
+    "category": "ui",
+    "priority": "Medium",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Load calendar view with a populated schedule and meetings."
+      },
+      {
+        "type": "assertion",
+        "description": "Ensure time blocks for tasks and meetings are rendered correctly without overlap."
+      },
+      {
+        "type": "assertion",
+        "description": "Check UI responsiveness across desktop and mobile screen sizes."
+      },
+      {
+        "type": "assertion",
+        "description": "Verify calendar is accessible (WCAG AA) with keyboard navigation and screen reader support."
+      }
+    ]
+  },
+  {
+    "id": "TC012",
+    "title": "Analytics Page Displays Accurate Time Usage and Burnout Prediction",
+    "description": "Verify that analytics charts show correct metrics for time tracking, efficiency score, progress, and burnout risk.",
+    "category": "functional",
+    "priority": "High",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Complete a work period with tracked tasks and events."
+      },
+      {
+        "type": "action",
+        "description": "Navigate to the analytics and insights page."
+      },
+      {
+        "type": "assertion",
+        "description": "Confirm time usage charts reflect real data from tasks and calendar."
+      },
+      {
+        "type": "assertion",
+        "description": "Check efficiency scores and burnout predictions match expected values computed by AI."
+      },
+      {
+        "type": "assertion",
+        "description": "Inspect charts for clarity, accuracy, and accessibility compliance."
+      }
+    ]
+  },
+  {
+    "id": "TC013",
+    "title": "Meeting Preparation Generates Agendas and Summaries",
+    "description": "Verify that the meeting prep tool produces relevant agendas, pre-reads, and actionable talking points based on meeting data.",
+    "category": "functional",
+    "priority": "Medium",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Select a meeting from the calendar or input meeting details."
+      },
+      {
+        "type": "action",
+        "description": "Trigger meeting prep workflow."
+      },
+      {
+        "type": "assertion",
+        "description": "Verify that the generated agenda is contextually relevant to the meeting topic."
+      },
+      {
+        "type": "assertion",
+        "description": "Confirm that pre-read materials and action prompts are logically sequenced and actionable."
+      }
+    ]
+  },
+  {
+    "id": "TC014",
+    "title": "Email Notifications Sent for Plan, Schedule, and Burnout Alerts",
+    "description": "Ensure that users receive timely email notifications when new plans are generated, schedules are changed, or burnout risk is detected.",
+    "category": "functional",
+    "priority": "High",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Trigger generation of a new AI daily plan."
+      },
+      {
+        "type": "assertion",
+        "description": "Verify receipt of an email notification with correct plan details."
+      },
+      {
+        "type": "action",
+        "description": "Make a change to the user's schedule."
+      },
+      {
+        "type": "assertion",
+        "description": "Confirm an email notification about the schedule change is received."
+      },
+      {
+        "type": "action",
+        "description": "Simulate a high burnout risk scenario based on analytics."
+      },
+      {
+        "type": "assertion",
+        "description": "Validate that a burnout alert email notification is sent."
+      }
+    ]
+  },
+  {
+    "id": "TC015",
+    "title": "Session Management and Secure Storage",
+    "description": "Verify that session-based authentication is handled correctly and sensitive data is stored encrypted.",
+    "category": "security",
+    "priority": "High",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Log in with valid credentials."
+      },
+      {
+        "type": "assertion",
+        "description": "Check that a secure session token is created and stored correctly."
+      },
+      {
+        "type": "action",
+        "description": "Inspect local storage and database for proper encryption of user data."
+      },
+      {
+        "type": "action",
+        "description": "Attempt to access protected resources after session expiration."
+      },
+      {
+        "type": "assertion",
+        "description": "Verify that access is denied and user is prompted to re-authenticate."
+      }
+    ]
+  },
+  {
+    "id": "TC016",
+    "title": "API Endpoint Error Handling and Telemetry",
+    "description": "Verify all API endpoints return proper error messages for invalid requests and log relevant telemetry.",
+    "category": "error handling",
+    "priority": "High",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Send requests to chat, AI planning, integrations, and notification endpoints with invalid data or missing parameters."
+      },
+      {
+        "type": "assertion",
+        "description": "Verify that API responses contain descriptive error messages with appropriate HTTP status codes."
+      },
+      {
+        "type": "assertion",
+        "description": "Check server logs or telemetry system to confirm error events are logged."
+      }
+    ]
+  },
+  {
+    "id": "TC017",
+    "title": "UI Accessibility and Responsive Design",
+    "description": "Validate that all UI components meet WCAG AA standards and respond correctly on desktop and mobile devices.",
+    "category": "ui",
+    "priority": "High",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Navigate through all main UI pages including dashboard, tasks, schedule, calendar, analytics, settings, and help."
+      },
+      {
+        "type": "assertion",
+        "description": "Test keyboard navigation for all interactive elements."
+      },
+      {
+        "type": "assertion",
+        "description": "Use screen reader to verify meaningful labels and ARIA attributes."
+      },
+      {
+        "type": "action",
+        "description": "Resize browser window to various breakpoints including mobile viewport sizes."
+      },
+      {
+        "type": "assertion",
+        "description": "Verify UI layout adapts correctly without content overlap or cutoff."
+      }
+    ]
+  },
+  {
+    "id": "TC018",
+    "title": "Floating Chatbot Real-Time Assistance Functionality",
+    "description": "Ensure the floating chatbot loads, accepts user input, sends queries to AI, and displays responses correctly.",
+    "category": "functional",
+    "priority": "Medium",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Open the app with the floating chatbot component available."
+      },
+      {
+        "type": "action",
+        "description": "Click to open the chatbot interface."
+      },
+      {
+        "type": "action",
+        "description": "Type a query and send it."
+      },
+      {
+        "type": "assertion",
+        "description": "Verify that the AI responses appear in the chat window appropriately."
+      },
+      {
+        "type": "assertion",
+        "description": "Check that the chatbot maintains context for follow-up questions."
+      }
+    ]
+  },
+  {
+    "id": "TC019",
+    "title": "Webhook Handling Idempotency and Reliability",
+    "description": "Verify that webhook requests from Jira and monday.com integrations are idempotently processed and failures are handled gracefully.",
+    "category": "integration",
+    "priority": "High",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Send valid webhook payloads to the monday.com and Jira webhook endpoints."
+      },
+      {
+        "type": "assertion",
+        "description": "Confirm tasks and data are updated appropriately without duplication."
+      },
+      {
+        "type": "action",
+        "description": "Send the same webhook payload multiple times (duplicate delivery)."
+      },
+      {
+        "type": "assertion",
+        "description": "Verify system processes only once and ignores duplicates."
+      },
+      {
+        "type": "action",
+        "description": "Send malformed webhook payloads."
+      },
+      {
+        "type": "assertion",
+        "description": "Confirm that errors are logged and appropriate HTTP error responses are returned without crashing the system."
+      }
+    ]
+  },
+  {
+    "id": "TC020",
+    "title": "Support for 10,000 Monthly Active Users Without Architectural Changes",
+    "description": "Verify system stability and performance under simulated load of 10,000 active users performing typical workflows.",
+    "category": "performance",
+    "priority": "High",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Using performance testing tools, simulate 10,000 concurrent users logging in, generating plans, creating schedules, and viewing analytics."
+      },
+      {
+        "type": "assertion",
+        "description": "Monitor server response times, error rates, and resource usage to confirm system remains stable and responsive without scaling."
+      }
+    ]
+  }
+]

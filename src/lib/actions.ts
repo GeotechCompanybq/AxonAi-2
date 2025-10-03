@@ -57,21 +57,7 @@ export async function handleAnalyzeTimeUsage(
     return result;
   } catch (error) {
     console.error("Error in handleAnalyzeTimeUsage:", error);
-    // Provide a structured fallback
-    const days = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"] as const;
-    const fallbackWeeklyUsage = days.map((day) => ({
-      day: day,
-      Study: 0,
-      Work: 0,
-      Personal: 0,
-      Chill: 1,
-      Sleep: 7,
-    }));
-    return {
-      weeklyUsage: fallbackWeeklyUsage,
-      analysisSummary:
-        "Error analyzing time usage. Displaying default estimates.",
-    };
+    throw error;
   }
 }
 
@@ -80,7 +66,16 @@ export async function handleCalculateEfficiencyScore(
 ): Promise<CalculateEfficiencyScoreOutput> {
   try {
     const result = await calculateEfficiencyScoreFlow(input);
-    return result;
+    // Sanitize result to ensure a numeric score and non-empty message
+    const rawScore = (result as any)?.score;
+    let score = Number(rawScore);
+    if (!Number.isFinite(score)) score = 0;
+    if (score < 0) score = 0;
+    if (score > 100) score = 100;
+    const message = (result as any)?.message || "Efficiency score calculated.";
+    const positiveFeedback = (result as any)?.positiveFeedback;
+    const improvementSuggestion = (result as any)?.improvementSuggestion;
+    return { score, message, positiveFeedback, improvementSuggestion };
   } catch (error) {
     console.error("Error in handleCalculateEfficiencyScore:", error);
     return {
