@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { cookies } from "next/headers";
 
-async function fetchMondayTasks(token: string) {
+export async function fetchMondayTasks(token: string) {
   // GraphQL helpers and queries
   async function graphql<T = any>(
     query: string,
@@ -75,7 +75,6 @@ async function fetchMondayTasks(token: string) {
           state
           group { id title }
           column_values { id text value type }
-          updates(limit:3){ id body text_body created_at creator{ id name } }
         }
       }
     }
@@ -159,7 +158,36 @@ async function fetchMondayTasks(token: string) {
     return s || "todo";
   }
 
-  return withDueDate.map((it: any) => {
+  // Helper to page through ALL updates for an item
+  async function fetchAllUpdates(itemId: string): Promise<string[]> {
+    const query = `query($id:[ID!],$limit:Int!,$page:Int!){
+      items(ids:$id){ updates(limit:$limit,page:$page){ id text_body } }
+    }`;
+    const comments: string[] = [];
+    let page = 1;
+    const limit = 100;
+    for (; page <= 50; page++) {
+      let json: any;
+      try {
+        json = await graphql(query, { id: itemId, limit, page });
+      } catch (e: any) {
+        // If the workspace/app lacks updates:read, silently skip comments
+        const msg = String(e?.message || "");
+        if (msg.includes("UNAUTHORIZED_FIELD_OR_TYPE")) return comments;
+        throw e;
+      }
+      const ups = json?.data?.items?.[0]?.updates || [];
+      if (!Array.isArray(ups) || ups.length === 0) break;
+      for (const u of ups) {
+        const text = String(u?.text_body || "").trim();
+        if (text) comments.push(text);
+      }
+    }
+    return comments;
+  }
+
+  const results: any[] = [];
+  for (const it of withDueDate) {
     const cvs = it.column_values || [];
     const columns: Array<any> = it.boardColumns || [];
     const getMeta = (colId: string) => columns.find((c: any) => c.id === colId);
@@ -182,13 +210,16 @@ async function fetchMondayTasks(token: string) {
         /date|timeline/i.test(String(meta?.title || c.id))
       );
     });
-    const comments: string[] = Array.isArray((it as any).updates)
-      ? ((it as any).updates as any[])
-          .map((u) => String(u?.text_body || "").trim())
-          .filter((t) => t.length > 0)
-      : [];
-
-    return {
+    let comments: string[] = [];
+    const allowUpdates = /^(1|true|yes)$/i.test(
+      process.env.MONDAY_READ_UPDATES || ""
+    );
+    if (allowUpdates) {
+      try {
+        comments = await fetchAllUpdates(String(it.id));
+      } catch {}
+    }
+    results.push({
       name: it.name,
       description: `${it.boardName}${
         it.group?.title ? " · " + it.group.title : ""
@@ -198,8 +229,9 @@ async function fetchMondayTasks(token: string) {
       status: mapStatus(statusText),
       category: it.boardName || "Work",
       comments,
-    };
-  });
+    });
+  }
+  return results;
 }
 
 export async function GET(req: NextRequest) {

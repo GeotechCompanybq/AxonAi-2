@@ -20,6 +20,8 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
+import { db } from "@/lib/firebase";
+import { collection, onSnapshot, query, orderBy } from "firebase/firestore";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -38,6 +40,7 @@ export default function TimesheetsPage() {
   const [saving, setSaving] = useState(false);
   const [optimizing, setOptimizing] = useState(false);
   const [autoFixing, setAutoFixing] = useState(false);
+  const [drafts, setDrafts] = useState<any[] | null>(null);
   const [range, setRange] = useState<
     "day" | "week" | "month" | "all" | "custom"
   >("all");
@@ -71,6 +74,24 @@ export default function TimesheetsPage() {
     }
     return { all: true } as const;
   };
+
+  // Live subscribe to user's local draft timesheets if uid is present on window
+  useEffect(() => {
+    const uid = (window as any)?.__AXON_UID__ || undefined;
+    if (!uid) return;
+    const col = collection(db as any, "users", uid, "timesheetDrafts");
+    const q = query(col, orderBy("spent_date", "asc"));
+    const unsub = onSnapshot(
+      q,
+      (snap) => {
+        const arr: any[] = [];
+        snap.forEach((d) => arr.push({ id: d.id, ...d.data() }));
+        setDrafts(arr);
+      },
+      () => setDrafts([])
+    );
+    return () => unsub();
+  }, []);
 
   const fetchEntries = async () => {
     setIsLoading(true);
@@ -421,6 +442,56 @@ export default function TimesheetsPage() {
             </div>
           </div>
           {error && <div className="text-sm text-red-600">{error}</div>}
+          {/* Drafts panel */}
+          {Array.isArray(drafts) && drafts.length > 0 && (
+            <div className="border rounded-md p-3 space-y-2 bg-muted/30">
+              <div className="text-sm font-medium">
+                Pending draft timesheets
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2">
+                {drafts.map((d) => (
+                  <div
+                    key={d.id}
+                    className="border rounded p-2 text-sm flex items-center justify-between gap-2"
+                  >
+                    <div className="truncate">
+                      <div className="font-medium">
+                        {d.spent_date} · {Number(d.hours).toFixed(2)}h
+                      </div>
+                      <div className="text-muted-foreground truncate max-w-[280px]">
+                        {d.notes}
+                      </div>
+                    </div>
+                    <div className="shrink-0">
+                      <Button
+                        size="sm"
+                        onClick={async () => {
+                          try {
+                            const res = await fetch("/api/harvest/timesheets", {
+                              method: "POST",
+                              headers: { "Content-Type": "application/json" },
+                              body: JSON.stringify({
+                                spent_date: d.spent_date,
+                                hours: d.hours,
+                                notes: d.notes,
+                              }),
+                            });
+                            if (!res.ok) throw new Error("Create failed");
+                          } catch (e: any) {
+                            setError(
+                              e?.message || "Failed to create timesheet"
+                            );
+                          }
+                        }}
+                      >
+                        Approve
+                      </Button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
           {/* Mobile card list */}
           <div className="grid grid-cols-1 gap-3 md:hidden">
             {entries.length === 0 && (
