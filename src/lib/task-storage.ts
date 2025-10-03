@@ -106,3 +106,14 @@ export function saveTasksToLocalStorage(tasks: Task[]): void {
   const uid = getUidFromLocal();
   if (uid) void writeCloud(uid, tasks);
 }
+
+// One-click migration: push current local tasks to Firestore for the active user
+export async function syncLocalTasksToCloud(): Promise<{ pushed: number }> {
+  if (typeof window === "undefined") return { pushed: 0 };
+  const uid = getUidFromLocal();
+  if (!uid) return { pushed: 0 };
+  const tasks = readLocal();
+  if (!tasks.length) return { pushed: 0 };
+  await writeCloud(uid, tasks);
+  return { pushed: tasks.length };
+}
