@@ -156,20 +156,15 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   );
 
   const signInWithGoogle = useCallback(async () => {
-    // Use popup by default for zero-cost local dev; fallback to redirect if popup is blocked.
+    // Force popup flow (no redirect fallback)
     setIsLoading(true);
     const provider = new GoogleAuthProvider();
     try {
       const userCredential = await signInWithPopup(auth, provider);
       handleAuthSuccess(userCredential.user);
-    } catch (err: any) {
-      try {
-        await signInWithRedirect(auth, provider);
-        return; // complete via getRedirectResult on return
-      } catch {
-        setIsLoading(false);
-        throw err;
-      }
+    } catch (err) {
+      setIsLoading(false);
+      throw err as Error;
     }
     setIsLoading(false);
   }, [router]);
