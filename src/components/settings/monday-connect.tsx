@@ -147,6 +147,28 @@ export function MondayConnect({ returnTo }: { returnTo?: string }) {
         if (user?.uid) syncUrl.searchParams.set("uid", user.uid);
         void fetch(syncUrl.toString());
       } catch {}
+
+      // Explicit client-side backfill to Firestore if server sync didn't run
+      try {
+        if (
+          user?.uid &&
+          Array.isArray(normalizedTasks) &&
+          normalizedTasks.length
+        ) {
+          await fetch(`/api/tasks`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              uid: user.uid,
+              // Special op understood by the existing POST /api/tasks route to bulk upsert
+              bulk: normalizedTasks.map((t) => ({
+                ...t,
+                source: "monday",
+              })),
+            }),
+          }).catch(() => {});
+        }
+      } catch {}
     } catch (e: any) {
       setStatus(e.message || "Failed to fetch tasks or plan");
     } finally {

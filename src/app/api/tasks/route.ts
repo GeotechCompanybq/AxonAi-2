@@ -7,16 +7,48 @@ export async function POST(req: NextRequest) {
     const uid = String(
       body?.uid || req.nextUrl.searchParams.get("uid") || ""
     ).trim();
-    const task = body?.task;
     if (!uid)
       return NextResponse.json({ error: "uid required" }, { status: 400 });
+
+    const { adminDb } = await import("@/lib/firebase-admin");
+
+    // Bulk upsert mode (used by Monday import fallback)
+    if (Array.isArray(body?.bulk)) {
+      const tasks: any[] = body.bulk;
+      const col = adminDb.collection("users").doc(uid).collection("tasks");
+      const batch = adminDb.batch();
+      for (const t of tasks) {
+        const name = String(t?.name || "").trim();
+        if (!name) continue;
+        const id = String(
+          t?.id ||
+            Buffer.from(`${name}|${t?.dueDate || ""}|${t?.source || "monday"}`)
+              .toString("base64")
+              .replace(/=+$/g, "")
+        );
+        const ref = col.doc(id);
+        batch.set(
+          ref,
+          {
+            ...t,
+            source: t?.source || "import",
+            createdAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString(),
+          },
+          { merge: true }
+        );
+      }
+      await batch.commit();
+      return NextResponse.json({ inserted: body.bulk.length });
+    }
+
+    // Single task create
+    const task = body?.task;
     if (!task?.name)
       return NextResponse.json(
         { error: "task.name required" },
         { status: 400 }
       );
-
-    const { adminDb } = await import("@/lib/firebase-admin");
     const id = String(
       task?.id ||
         Buffer.from(`${task.name}|${task.dueDate || ""}`)
@@ -33,6 +65,7 @@ export async function POST(req: NextRequest) {
           ...task,
           source: task?.source || "chat",
           createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
         },
         { merge: true }
       );
