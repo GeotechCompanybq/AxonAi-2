@@ -10,6 +10,23 @@ import {
 } from "@/components/ui/sheet";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import {
+  getTasksFromLocalStorage,
+  saveTasksToLocalStorage,
+} from "@/lib/task-storage";
+import type { Task } from "@/types";
+import { db } from "@/lib/firebase";
+import {
+  collection,
+  getDocs,
+  orderBy,
+  query,
+  addDoc,
+  setDoc,
+  doc,
+  serverTimestamp,
+  limit,
+} from "firebase/firestore";
 
 type ChatMessage = { role: "assistant" | "user"; content: string };
 
@@ -19,6 +36,15 @@ export function FloatingChatBot() {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [typing, setTyping] = useState(false);
   const listRef = useRef<HTMLDivElement | null>(null);
+  const [sessionId, setSessionId] = useState<string | null>(null);
+  const [pendingCreate, setPendingCreate] = useState<
+    | {
+        active: true;
+        step: "name" | "description" | "dueDate";
+        task: { name?: string; description?: string; dueDate?: string };
+      }
+    | { active: false }
+  >({ active: false });
 
   useEffect(() => {
     if (open && messages.length === 0) {
@@ -31,6 +57,114 @@ export function FloatingChatBot() {
       ]);
     }
   }, [open, messages.length]);
+
+  // Read UID from window or localStorage
+  const readUid = (): string | undefined => {
+    try {
+      const w: any = window as any;
+      if (w?.__AXON_UID__) return String(w.__AXON_UID__);
+      for (let i = 0; i < window.localStorage.length; i++) {
+        const key = window.localStorage.key(i) || "";
+        if (key.startsWith("firebase:authUser")) {
+          const raw = window.localStorage.getItem(key);
+          if (!raw) continue;
+          const obj = JSON.parse(raw);
+          if (obj?.uid) return String(obj.uid);
+        }
+      }
+    } catch {}
+    return undefined;
+  };
+
+  // Ensure there is an active chat session for the user
+  const ensureSession = async (): Promise<string | null> => {
+    const uid = readUid();
+    if (!uid) return null;
+    if (sessionId) return sessionId;
+    try {
+      const col = collection(db as any, "users", uid, "chatSessions");
+      const qy = query(col, orderBy("updatedAt", "desc"), limit(1));
+      const snap = await getDocs(qy);
+      if (!snap.empty) {
+        const first = snap.docs[0];
+        setSessionId(first.id);
+        return first.id;
+      }
+      const ref = await addDoc(col, {
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+        title: "Axon chat",
+      });
+      setSessionId(ref.id);
+      return ref.id;
+    } catch {
+      return null;
+    }
+  };
+
+  // Load previous messages when opening chat
+  useEffect(() => {
+    const load = async () => {
+      if (!open) return;
+      const uid = readUid();
+      if (!uid) return;
+      const sid = await ensureSession();
+      if (!sid) return;
+      try {
+        const msgsCol = collection(
+          db as any,
+          "users",
+          uid,
+          "chatSessions",
+          sid,
+          "messages"
+        );
+        const snap = await getDocs(query(msgsCol, orderBy("createdAt", "asc")));
+        const arr: ChatMessage[] = [];
+        snap.forEach((d) => {
+          const r = d.get("role");
+          const c = d.get("content");
+          if ((r === "assistant" || r === "user") && typeof c === "string") {
+            arr.push({ role: r, content: c });
+          }
+        });
+        if (arr.length > 0) setMessages(arr);
+      } catch {}
+    };
+    // eslint-disable-next-line @typescript-eslint/no-floating-promises
+    load();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open]);
+
+  const persistMessage = async (
+    role: "assistant" | "user",
+    content: string
+  ) => {
+    try {
+      const uid = readUid();
+      if (!uid) return;
+      const sid = (await ensureSession()) as string | null;
+      if (!sid) return;
+      const msgsCol = collection(
+        db as any,
+        "users",
+        uid,
+        "chatSessions",
+        sid,
+        "messages"
+      );
+      await addDoc(msgsCol, {
+        role,
+        content,
+        createdAt: serverTimestamp(),
+      });
+      await setDoc(
+        doc(db as any, "users", uid, "chatSessions", sid),
+        { updatedAt: serverTimestamp(), lastMessage: content.slice(0, 200) },
+        { merge: true }
+      );
+    } catch {}
+  };
 
   useEffect(() => {
     listRef.current?.scrollTo({
@@ -50,9 +184,573 @@ export function FloatingChatBot() {
     const trimmed = input.trim();
     if (!trimmed) return;
     setMessages((m) => [...m, { role: "user", content: trimmed }]);
+    // Fire-and-forget persist of user message
+    // eslint-disable-next-line @typescript-eslint/no-floating-promises
+    persistMessage("user", trimmed);
     setInput("");
     setTyping(true);
     try {
+      // Review drafted timesheets
+      const wantsReviewDrafts =
+        /\breview\b/i.test(trimmed) || /review\s+timesheets/i.test(trimmed);
+      if (wantsReviewDrafts) {
+        const uid =
+          (window as any)?.__AXON_UID__ ||
+          ((): string | undefined => {
+            try {
+              for (let i = 0; i < window.localStorage.length; i++) {
+                const key = window.localStorage.key(i) || "";
+                if (key.startsWith("firebase:authUser")) {
+                  const raw = window.localStorage.getItem(key);
+                  if (!raw) continue;
+                  const obj = JSON.parse(raw);
+                  if (obj?.uid) return String(obj.uid);
+                }
+              }
+            } catch {}
+            return undefined;
+          })();
+        if (!uid) {
+          setMessages((m) => [
+            ...m,
+            { role: "assistant", content: "Please sign in to review drafts." },
+          ]);
+          // eslint-disable-next-line @typescript-eslint/no-floating-promises
+          persistMessage("assistant", "Please sign in to review drafts.");
+          setTyping(false);
+          return;
+        }
+        try {
+          const col = collection(db as any, "users", uid, "timesheetDrafts");
+          const q = query(col, orderBy("spent_date", "asc"));
+          const snap = await getDocs(q);
+          const drafts: any[] = [];
+          snap.forEach((d) => drafts.push({ id: d.id, ...d.data() }));
+          if (drafts.length === 0) {
+            setMessages((m) => [
+              ...m,
+              { role: "assistant", content: "No drafted timesheets found." },
+            ]);
+            // eslint-disable-next-line @typescript-eslint/no-floating-promises
+            persistMessage("assistant", "No drafted timesheets found.");
+            setTyping(false);
+            return;
+          }
+          const byDate = new Map<string, { total: number; items: any[] }>();
+          for (const d of drafts) {
+            const date = String(d?.spent_date || "");
+            if (!byDate.has(date)) byDate.set(date, { total: 0, items: [] });
+            const rec = byDate.get(date)!;
+            const h = Number(d?.hours || 0);
+            rec.total += Number.isFinite(h) ? h : 0;
+            rec.items.push(d);
+          }
+          const lines: string[] = [];
+          lines.push(
+            `You have ${drafts.length} drafted timesheet${
+              drafts.length === 1 ? "" : "s"
+            }.`
+          );
+          Array.from(byDate.entries())
+            .sort((a, b) => a[0].localeCompare(b[0]))
+            .forEach(([date, rec]) => {
+              const sample = rec.items
+                .slice(0, 3)
+                .map((x) => String(x?.notes || x?.task || ""))
+                .filter(Boolean)
+                .join("; ");
+              lines.push(
+                `${date}: ${rec.total.toFixed(2)}h` +
+                  (sample ? ` — ${sample}` : "")
+              );
+            });
+          lines.push("You can approve drafts on the Timesheets page.");
+          setMessages((m) => [
+            ...m,
+            { role: "assistant", content: lines.join("\n") },
+          ]);
+          // eslint-disable-next-line @typescript-eslint/no-floating-promises
+          persistMessage("assistant", lines.join("\n"));
+          setTyping(false);
+          return;
+        } catch {
+          setMessages((m) => [
+            ...m,
+            {
+              role: "assistant",
+              content: "Failed to read drafted timesheets.",
+            },
+          ]);
+          // eslint-disable-next-line @typescript-eslint/no-floating-promises
+          persistMessage("assistant", "Failed to read drafted timesheets.");
+          setTyping(false);
+          return;
+        }
+      }
+
+      // Analysis intents: timesheets and tasks (robust to "analysis" and plurals)
+      const textLc = trimmed.toLowerCase();
+      const analysisTerms = [
+        "analyze",
+        "analyse",
+        "analysis",
+        "summary",
+        "summarize",
+        "report",
+        "insight",
+        "breakdown",
+        "review",
+      ];
+      const timesheetTerms = [
+        "timesheet",
+        "timesheets",
+        "time sheet",
+        "time sheets",
+        "hours",
+        "work hours",
+        "work time",
+        "logged time",
+        "harvest",
+        "week",
+      ];
+      const taskTerms = [
+        "task",
+        "tasks",
+        "todo",
+        "todos",
+        "to-do",
+        "to-dos",
+        "work items",
+      ];
+      const hasAnalysis = analysisTerms.some((t) => textLc.includes(t));
+      const wantsAnalyzeTimesheets =
+        hasAnalysis && timesheetTerms.some((t) => textLc.includes(t));
+      const wantsAnalyzeTasks =
+        (hasAnalysis && taskTerms.some((t) => textLc.includes(t))) ||
+        /(what'?s\s+due|due\s+today|overdue)/i.test(trimmed);
+      if (wantsAnalyzeTimesheets || wantsAnalyzeTasks) {
+        const uid =
+          (window as any)?.__AXON_UID__ ||
+          ((): string | undefined => {
+            try {
+              for (let i = 0; i < window.localStorage.length; i++) {
+                const key = window.localStorage.key(i) || "";
+                if (key.startsWith("firebase:authUser")) {
+                  const raw = window.localStorage.getItem(key);
+                  if (!raw) continue;
+                  const obj = JSON.parse(raw);
+                  if (obj?.uid) return String(obj.uid);
+                }
+              }
+            } catch {}
+            return undefined;
+          })();
+        let timesheetSummary = "";
+        if (wantsAnalyzeTimesheets && uid) {
+          try {
+            const today = new Date();
+            const start = new Date(today);
+            start.setDate(today.getDate() - 7);
+            const from = start.toISOString().slice(0, 10);
+            const to = today.toISOString().slice(0, 10);
+            // Prefer Firestore if available
+            let list: any[] = [];
+            try {
+              const col = collection(
+                db as any,
+                "users",
+                uid,
+                "harvestTimesheets"
+              );
+              const snap = await getDocs(col);
+              const all: any[] = [];
+              snap.forEach((d) => all.push(d.data()));
+              list = all.filter((e) => {
+                const d = String(e?.spent_date || "");
+                return d >= from && d <= to;
+              });
+            } catch {}
+            // Fallback to direct API if Firestore empty
+            if (!list || list.length === 0) {
+              const url = new URL(
+                "/api/harvest/timesheets",
+                window.location.origin
+              );
+              url.searchParams.set("from", from);
+              url.searchParams.set("to", to);
+              url.searchParams.set("uid", uid);
+              url.searchParams.set("sync", "0");
+              const res = await fetch(url.toString(), { cache: "no-store" });
+              const json = await res.json();
+              list = Array.isArray(json?.timeEntries) ? json.timeEntries : [];
+            }
+            const total = list.reduce((s, e) => s + (Number(e?.hours) || 0), 0);
+            const perProject = new Map<string, number>();
+            list.forEach((e: any) => {
+              const key = String(
+                e?.project?.name || e?.client?.name || "Other"
+              );
+              perProject.set(
+                key,
+                (perProject.get(key) || 0) + (Number(e?.hours) || 0)
+              );
+            });
+            const top = Array.from(perProject.entries())
+              .sort((a, b) => b[1] - a[1])
+              .slice(0, 3)
+              .map(([k, v]) => `${k}: ${v.toFixed(2)}h`)
+              .join(", ");
+            timesheetSummary = `Worked ${total.toFixed(
+              2
+            )}h in the last 7 days. Top projects: ${top || "N/A"}.`;
+            // Background sync
+            try {
+              const url = new URL(
+                "/api/harvest/timesheets",
+                window.location.origin
+              );
+              url.searchParams.set("from", from);
+              url.searchParams.set("to", to);
+              url.searchParams.set("uid", uid);
+              url.searchParams.set("sync", "1");
+              void fetch(url.toString());
+            } catch {}
+          } catch {
+            timesheetSummary = "Could not load timesheets.";
+          }
+        }
+
+        let taskSummary = "";
+        if (wantsAnalyzeTasks) {
+          try {
+            // Prefer Firestore tasks if available
+            let tasks: any[] = [];
+            try {
+              const uid =
+                (window as any)?.__AXON_UID__ ||
+                ((): string | undefined => {
+                  try {
+                    for (let i = 0; i < window.localStorage.length; i++) {
+                      const key = window.localStorage.key(i) || "";
+                      if (key.startsWith("firebase:authUser")) {
+                        const raw = window.localStorage.getItem(key);
+                        if (!raw) continue;
+                        const obj = JSON.parse(raw);
+                        if (obj?.uid) return String(obj.uid);
+                      }
+                    }
+                  } catch {}
+                  return undefined;
+                })();
+              if (uid) {
+                const col = collection(db as any, "users", uid, "tasks");
+                const snap = await getDocs(col);
+                snap.forEach((d) => tasks.push({ id: d.id, ...d.data() }));
+              }
+            } catch {}
+            if (!tasks || tasks.length === 0) {
+              tasks = getTasksFromLocalStorage();
+            }
+            const counts = tasks.reduce(
+              (acc: any, t: any) => {
+                acc.total++;
+                acc[t.status || "todo"] = (acc[t.status || "todo"] || 0) + 1;
+                return acc;
+              },
+              { total: 0 }
+            );
+            const now = new Date();
+            const todayStr = now.toISOString().slice(0, 10);
+            const threeDays = new Date(now);
+            threeDays.setDate(now.getDate() + 3);
+            const dueToday = tasks.filter((t: any) =>
+              (t.dueDate || "").startsWith(todayStr)
+            );
+            const dueSoon = tasks.filter((t: any) => {
+              if (!t.dueDate) return false;
+              const d = new Date(t.dueDate);
+              return d > now && d <= threeDays;
+            });
+            const sample = (arr: any[]) =>
+              arr
+                .slice(0, 3)
+                .map((t) => t.name)
+                .join(", ");
+            taskSummary = `Tasks: total ${counts.total}, todo ${
+              counts.todo || 0
+            }, inprogress ${counts.inprogress || 0}, blocked ${
+              counts.blocked || 0
+            }, done ${counts.done || 0}. Due today: ${
+              dueToday.length
+            } (${sample(dueToday)}). Due soon: ${dueSoon.length} (${sample(
+              dueSoon
+            )}).`;
+          } catch {
+            taskSummary = "Could not read tasks.";
+          }
+        }
+
+        const combined = [timesheetSummary, taskSummary]
+          .filter(Boolean)
+          .join("\n");
+        setMessages((m) => [
+          ...m,
+          { role: "assistant", content: combined || "No data found." },
+        ]);
+        // eslint-disable-next-line @typescript-eslint/no-floating-promises
+        persistMessage("assistant", combined || "No data found.");
+        setTyping(false);
+        return;
+      }
+      // Handle task creation wizard follow-ups
+      if (pendingCreate.active) {
+        const current = pendingCreate;
+        if (current.step === "name") {
+          const name = trimmed.replace(/^name\s*:\s*/i, "").trim();
+          if (!name) {
+            setMessages((m) => [
+              ...m,
+              { role: "assistant", content: "Please provide a task name." },
+            ]);
+            setTyping(false);
+            return;
+          }
+          setPendingCreate({
+            active: true,
+            step: "description",
+            task: { ...current.task, name },
+          });
+          setMessages((m) => [
+            ...m,
+            {
+              role: "assistant",
+              content:
+                "Got it: '" +
+                name +
+                "'. Add a brief description? (or type 'skip')",
+            },
+          ]);
+          // eslint-disable-next-line @typescript-eslint/no-floating-promises
+          persistMessage(
+            "assistant",
+            "Got it: '" + name + "'. Add a brief description? (or type 'skip')"
+          );
+          setTyping(false);
+          return;
+        }
+        if (current.step === "description") {
+          const description = /^skip$/i.test(trimmed) ? undefined : trimmed;
+          setPendingCreate({
+            active: true,
+            step: "dueDate",
+            task: { ...current.task, description },
+          });
+          setMessages((m) => [
+            ...m,
+            {
+              role: "assistant",
+              content:
+                "Any due date? (YYYY-MM-DD) or type 'skip' to leave unset",
+            },
+          ]);
+          // eslint-disable-next-line @typescript-eslint/no-floating-promises
+          persistMessage(
+            "assistant",
+            "Any due date? (YYYY-MM-DD) or type 'skip' to leave unset"
+          );
+          setTyping(false);
+          return;
+        }
+        if (current.step === "dueDate") {
+          let due: string | undefined = undefined;
+          if (!/^skip$/i.test(trimmed)) {
+            const m = trimmed.match(/^\s*(\d{4}-\d{2}-\d{2})\s*$/);
+            if (m) {
+              const dt = new Date(m[1] + "T00:00:00Z");
+              if (!isNaN(dt.getTime())) due = dt.toISOString();
+            }
+          }
+          const finalTask = { ...current.task, dueDate: due };
+          // Create
+          const uid =
+            (window as any)?.__AXON_UID__ ||
+            ((): string | undefined => {
+              try {
+                for (let i = 0; i < window.localStorage.length; i++) {
+                  const key = window.localStorage.key(i) || "";
+                  if (key.startsWith("firebase:authUser")) {
+                    const raw = window.localStorage.getItem(key);
+                    if (!raw) continue;
+                    const obj = JSON.parse(raw);
+                    if (obj?.uid) return String(obj.uid);
+                  }
+                }
+              } catch {}
+              return undefined;
+            })();
+          if (uid && finalTask.name) {
+            try {
+              await fetch(`/api/tasks`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                  uid,
+                  task: { ...finalTask, status: "todo" },
+                }),
+              });
+            } catch {}
+            try {
+              const existing = getTasksFromLocalStorage();
+              const newTask: Task = {
+                id: `chat-${Date.now()}`,
+                name: finalTask.name!,
+                description: finalTask.description,
+                dueDate: finalTask.dueDate,
+                status: "todo",
+                priority: "medium",
+                category: "General",
+              } as any;
+              saveTasksToLocalStorage([newTask, ...existing]);
+            } catch {}
+            setMessages((m) => [
+              ...m,
+              {
+                role: "assistant",
+                content:
+                  "Created task: " +
+                  finalTask.name +
+                  (finalTask.dueDate
+                    ? " (due " + finalTask.dueDate.slice(0, 10) + ")"
+                    : ""),
+              },
+            ]);
+            // eslint-disable-next-line @typescript-eslint/no-floating-promises
+            persistMessage(
+              "assistant",
+              "Created task: " +
+                finalTask.name +
+                (finalTask.dueDate
+                  ? " (due " + finalTask.dueDate.slice(0, 10) + ")"
+                  : "")
+            );
+            setPendingCreate({ active: false });
+            setTyping(false);
+            return;
+          }
+        }
+      }
+      // Draft timesheets from Monday tasks
+      const wantsDraftTimesheets =
+        /timesheet/i.test(trimmed) &&
+        /(draft|create|generate|fill|missing)/i.test(trimmed);
+      if (wantsDraftTimesheets) {
+        const uid =
+          (window as any)?.__AXON_UID__ ||
+          ((): string | undefined => {
+            try {
+              for (let i = 0; i < window.localStorage.length; i++) {
+                const key = window.localStorage.key(i) || "";
+                if (key.startsWith("firebase:authUser")) {
+                  const raw = window.localStorage.getItem(key);
+                  if (!raw) continue;
+                  const obj = JSON.parse(raw);
+                  if (obj?.uid) return String(obj.uid);
+                }
+              }
+            } catch {}
+            return undefined;
+          })();
+        if (uid) {
+          const today = new Date();
+          const start = new Date(today);
+          start.setDate(today.getDate() - 7);
+          const from = start.toISOString().slice(0, 10);
+          const to = today.toISOString().slice(0, 10);
+          try {
+            const resRec = await fetch(
+              `/api/harvest/drafts/reconcile?uid=${encodeURIComponent(uid)}`,
+              {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                  from,
+                  to,
+                  defaultHours: 1,
+                  targetPerDay: 8,
+                }),
+              }
+            );
+            const data = await resRec.json();
+            if (resRec.ok) {
+              const n = Array.isArray(data?.drafts) ? data.drafts.length : 0;
+              setMessages((m) => [
+                ...m,
+                {
+                  role: "assistant",
+                  content:
+                    n > 0
+                      ? `Drafted ${n} Harvest timesheet${
+                          n === 1 ? "" : "s"
+                        } from your Monday tasks for the last 7 days. Review them in Timesheets.`
+                      : "No missing days found to draft from Monday tasks in the last 7 days.",
+                },
+              ]);
+              setTyping(false);
+              return;
+            }
+          } catch {}
+        }
+      }
+
+      // If user asks to "create task" or "add task", start a brief wizard
+      const createMatch = /(create|add)\s+task\b/i.test(trimmed);
+      if (createMatch) {
+        const nameMatch =
+          trimmed.match(/task\b(?:\s+named)?\s+\"([^\"]+)\"/i) ||
+          trimmed.match(/task\s+(.+)/i);
+        const nameExtracted = nameMatch
+          ? (
+              nameMatch[1] ||
+              nameMatch[0].replace(/^(create|add)\s+task\s+/i, "")
+            ).trim()
+          : undefined;
+        if (nameExtracted) {
+          setPendingCreate({
+            active: true,
+            step: "description",
+            task: { name: nameExtracted },
+          });
+          setMessages((m) => [
+            ...m,
+            {
+              role: "assistant",
+              content:
+                "Noted: '" +
+                nameExtracted +
+                "'. Add a description? (or type 'skip')",
+            },
+          ]);
+          // eslint-disable-next-line @typescript-eslint/no-floating-promises
+          persistMessage(
+            "assistant",
+            "Noted: '" +
+              nameExtracted +
+              "'. Add a description? (or type 'skip')"
+          );
+          setTyping(false);
+          return;
+        } else {
+          setPendingCreate({ active: true, step: "name", task: {} });
+          setMessages((m) => [
+            ...m,
+            { role: "assistant", content: "What is the task name?" },
+          ]);
+          // eslint-disable-next-line @typescript-eslint/no-floating-promises
+          persistMessage("assistant", "What is the task name?");
+          setTyping(false);
+          return;
+        }
+      }
       const res = await fetch("/api/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -61,8 +759,76 @@ export function FloatingChatBot() {
         }),
       });
       if (!res.ok) throw new Error("request_failed");
-      const data = (await res.json()) as { reply: string };
-      setMessages((m) => [...m, { role: "assistant", content: data.reply }]);
+      const raw = await res.text();
+      let text: string | null = null;
+      try {
+        const data = JSON.parse(raw);
+        const extract = (d: any): string | null => {
+          if (!d) return null;
+          if (typeof d === "string") return d;
+          const direct =
+            (typeof d.reply === "string" && d.reply) ||
+            (typeof d.message === "string" && d.message) ||
+            (typeof d.response === "string" && d.response) ||
+            (typeof d.content === "string" && d.content) ||
+            (typeof d.text === "string" && d.text);
+          if (direct && String(direct).trim()) return String(direct);
+
+          if (d?.choices?.[0]?.message?.content)
+            return String(d.choices[0].message.content);
+          if (d?.choices?.[0]?.delta?.content)
+            return String(d.choices[0].delta.content);
+
+          if (d?.candidates?.[0]?.content?.parts) {
+            const parts = d.candidates[0].content.parts;
+            const str = parts
+              .map((p: any) => p?.text)
+              .filter(Boolean)
+              .join("\n")
+              .trim();
+            if (str) return str;
+          }
+
+          if (Array.isArray(d?.messages)) {
+            const last = [...d.messages]
+              .reverse()
+              .find((m: any) => typeof m?.content === "string");
+            if (last?.content) return String(last.content);
+          }
+
+          if (d.output) {
+            const out = extract(d.output);
+            if (out) return out;
+          }
+
+          const queue: any[] = [d];
+          while (queue.length) {
+            const cur = queue.shift();
+            if (!cur || typeof cur !== "object") continue;
+            for (const key of Object.keys(cur)) {
+              const val: any = (cur as any)[key];
+              if (
+                typeof val === "string" &&
+                /^(content|text|reply|message|response)$/i.test(key) &&
+                val.trim()
+              )
+                return val;
+              if (val && typeof val === "object") queue.push(val);
+              if (Array.isArray(val)) for (const v of val) queue.push(v);
+            }
+          }
+          return null;
+        };
+        text = extract(data);
+      } catch {
+        text = raw?.trim() || null;
+      }
+      setMessages((m) => [
+        ...m,
+        { role: "assistant", content: text || "(No reply text received)" },
+      ]);
+      // eslint-disable-next-line @typescript-eslint/no-floating-promises
+      persistMessage("assistant", text || "(No reply text received)");
     } catch (e) {
       setMessages((m) => [
         ...m,
@@ -71,6 +837,8 @@ export function FloatingChatBot() {
           content: "Sorry, I couldn’t reach the AI right now.",
         },
       ]);
+      // eslint-disable-next-line @typescript-eslint/no-floating-promises
+      persistMessage("assistant", "Sorry, I couldn’t reach the AI right now.");
     } finally {
       setTyping(false);
     }

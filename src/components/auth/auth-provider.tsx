@@ -81,6 +81,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
             window.sessionStorage.removeItem("postLoginRedirect");
           } catch {}
         }
+        // Only redirect if we're truly on a landing/auth page. Preserve deep links.
         router.replace(destination);
       }
     }
@@ -117,8 +118,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       typeof window !== "undefined"
         ? window.sessionStorage.getItem("postLoginRedirect")
         : null;
-    const destination =
-      stored || (pathname.startsWith("/org") ? "/org/dashboard" : "/dashboard");
+    const destination = stored || pathname || "/dashboard";
     if (stored) {
       try {
         window.sessionStorage.removeItem("postLoginRedirect");

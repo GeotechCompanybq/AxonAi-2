@@ -29,10 +29,9 @@ export default function AdminRoute({
   }
 
   if (!isAdmin) {
-    router.replace("/dashboard");
+    // Keep the user on their current page rather than forcing a dashboard redirect.
     return null;
   }
 
   return <>{children}</>;
 }
-
