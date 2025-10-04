@@ -7,6 +7,8 @@ import { IconSpinner } from "@/components/icons";
 import { useAuth } from "@/hooks/use-auth";
 import type { Task, TaskStatus } from "@/types";
 import { saveTasksToLocalStorage } from "@/lib/task-storage";
+import { db } from "@/lib/firebase";
+import { doc, serverTimestamp, setDoc } from "firebase/firestore";
 
 export function MondayConnect({ returnTo }: { returnTo?: string }) {
   const { user } = useAuth();
@@ -148,27 +150,49 @@ export function MondayConnect({ returnTo }: { returnTo?: string }) {
         void fetch(syncUrl.toString());
       } catch {}
 
-      // Explicit client-side backfill to Firestore if server sync didn't run
-      try {
-        if (
-          user?.uid &&
-          Array.isArray(normalizedTasks) &&
-          normalizedTasks.length
-        ) {
-          await fetch(`/api/tasks`, {
+      // Explicit backfill to Firestore
+      if (user?.uid && normalizedTasks.length) {
+        let posted = false;
+        try {
+          const resp = await fetch(`/api/tasks`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
               uid: user.uid,
-              // Special op understood by the existing POST /api/tasks route to bulk upsert
-              bulk: normalizedTasks.map((t) => ({
-                ...t,
-                source: "monday",
-              })),
+              bulk: normalizedTasks.map((t) => ({ ...t, source: "monday" })),
             }),
-          }).catch(() => {});
+          });
+          posted = resp.ok;
+        } catch {
+          posted = false;
         }
-      } catch {}
+        if (!posted) {
+          const toPlain = (t: any) => {
+            const out: any = {};
+            if (t.name) out.name = String(t.name);
+            if (t.description) out.description = String(t.description);
+            if (t.dueDate) out.dueDate = String(t.dueDate);
+            if (t.priority) out.priority = String(t.priority);
+            if (t.status) out.status = String(t.status);
+            if (t.category) out.category = String(t.category);
+            if (Array.isArray(t.comments)) out.comments = t.comments;
+            out.source = "monday";
+            out.updatedAt = new Date().toISOString();
+            return out;
+          };
+          for (const t of normalizedTasks) {
+            try {
+              const key = `${t.name}|${t.dueDate || ""}|monday`;
+              const id = btoa(key).replace(/=+$/g, "");
+              await setDoc(
+                doc(db as any, "users", user.uid, "tasks", id),
+                { ...toPlain(t), createdAt: serverTimestamp() },
+                { merge: true }
+              );
+            } catch {}
+          }
+        }
+      }
     } catch (e: any) {
       setStatus(e.message || "Failed to fetch tasks or plan");
     } finally {
