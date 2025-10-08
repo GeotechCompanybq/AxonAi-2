@@ -256,19 +256,20 @@ export async function fetchMondayTasks(token: string) {
 export async function GET(req: NextRequest) {
   try {
     const cookieStore = await cookies();
-    let token = cookieStore.get("monday_token")?.value;
+    let token: string | undefined;
     // Optionally scope to a user id for storing tasks
     const uid = req.nextUrl.searchParams.get("uid") || undefined;
     const doSync = req.nextUrl.searchParams.get("sync") === "1";
-    if (!token && uid) {
-      // Prefer Mongo
+
+    // Always prefer Mongo when uid is present
+    if (uid) {
       try {
         const db = await getDb();
         const { users } = getCollectionNames();
         const doc = await db.collection(users).findOne({ uid });
         token = (doc as any)?.monday?.accessToken as string | undefined;
       } catch {}
-      // Fallback to Firestore
+      // Fallback to Firestore if not in Mongo
       if (!token) {
         try {
           const { adminDb } = await import("@/lib/firebase-admin");
@@ -276,6 +277,13 @@ export async function GET(req: NextRequest) {
           token = snap.get("monday.accessToken") as string | undefined;
         } catch {}
       }
+      // Final fallback to cookie
+      if (!token) {
+        token = cookieStore.get("monday_token")?.value;
+      }
+    } else {
+      // No uid: fall back to cookie only
+      token = cookieStore.get("monday_token")?.value;
     }
     if (!token)
       return NextResponse.json({ error: "Not connected" }, { status: 400 });

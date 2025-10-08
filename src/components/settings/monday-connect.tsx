@@ -20,7 +20,9 @@ export function MondayConnect({ returnTo }: { returnTo?: string }) {
     let ignore = false;
     (async () => {
       try {
-        const res = await fetch("/api/monday/status", { cache: "no-store" });
+        const url = new URL("/api/monday/status", window.location.origin);
+        if (user?.uid) url.searchParams.set("uid", user.uid);
+        const res = await fetch(url.toString(), { cache: "no-store" });
         const json = await res.json();
         if (!ignore) setConnected(Boolean(json?.connected));
       } catch {
@@ -30,7 +32,7 @@ export function MondayConnect({ returnTo }: { returnTo?: string }) {
     return () => {
       ignore = true;
     };
-  }, []);
+  }, [user?.uid]);
 
   const connect = useCallback(async () => {
     const url = new URL("/api/monday/auth", window.location.origin);

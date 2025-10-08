@@ -1,34 +1,28 @@
 import { NextRequest, NextResponse } from "next/server";
 import { cookies } from "next/headers";
+import { getDb, getCollectionNames } from "@/lib/mongo";
 
 export async function GET(req: NextRequest) {
   try {
     const cookieStore = await cookies();
-    const token = cookieStore.get("jira_token")?.value;
+    let token: string | undefined;
+    const uid = req.nextUrl.searchParams.get("uid") || undefined;
+    if (uid) {
+      try {
+        const db = await getDb();
+        const { users } = getCollectionNames();
+        const doc = await db.collection(users).findOne({ uid });
+        token = (doc as any)?.jira?.accessToken as string | undefined;
+      } catch {}
+    }
+    if (!token) token = cookieStore.get("jira_token")?.value;
 
-    if (!token) {
-      return NextResponse.json({ connected: false });
+    // Local UX: consider "connected" if we have any stored token
+    if (token) {
+      return NextResponse.json({ connected: true });
     }
 
-    // Validate token by checking user's Jira profile
-    const meRes = await fetch("https://api.atlassian.com/me", {
-      headers: {
-        Authorization: `Bearer ${token}`,
-        Accept: "application/json",
-      },
-    });
-
-    if (!meRes.ok) {
-      // Token is invalid or expired
-      return NextResponse.json({ connected: false });
-    }
-
-    const me = await meRes.json();
-    return NextResponse.json({
-      connected: true,
-      email: me.email,
-      name: me.name,
-    });
+    return NextResponse.json({ connected: false });
   } catch (error) {
     console.error("Jira connection status check failed", error);
     return NextResponse.json({ connected: false });

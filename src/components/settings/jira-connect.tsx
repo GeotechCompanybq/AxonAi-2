@@ -18,7 +18,9 @@ export function JiraConnect() {
     let ignore = false;
     (async () => {
       try {
-        const res = await fetch("/api/jira/status", { cache: "no-store" });
+        const url = new URL("/api/jira/status", window.location.origin);
+        if (user?.uid) url.searchParams.set("uid", user.uid);
+        const res = await fetch(url.toString(), { cache: "no-store" });
         const json = await res.json();
         if (!ignore) setConnected(Boolean(json?.connected));
       } catch {
@@ -28,7 +30,7 @@ export function JiraConnect() {
     return () => {
       ignore = true;
     };
-  }, []);
+  }, [user?.uid]);
 
   const connect = useCallback(async () => {
     const url = new URL("/api/jira/auth", window.location.origin);
