@@ -7,10 +7,14 @@ export async function GET(req: NextRequest) {
     const { searchParams } = new URL(req.url);
     const code = searchParams.get("code");
     const state = searchParams.get("state") || undefined;
-    const uid = state
-      ?.split("|")
-      ?.find((s) => s.startsWith("uid:"))
-      ?.slice(4);
+    // Prefer uid from state; fallback to short-lived cookie set during auth
+    const cookieStore = await cookies();
+    const uidFromCookie = cookieStore.get("monday_uid")?.value || undefined;
+    const uid =
+      state
+        ?.split("|")
+        ?.find((s) => s.startsWith("uid:"))
+        ?.slice(4) || uidFromCookie;
     const ret = state
       ?.split("|")
       ?.find((s) => s.startsWith("ret:"))
@@ -51,7 +55,6 @@ export async function GET(req: NextRequest) {
     }
 
     // Persist token in an httpOnly cookie for convenience; also store in DB tied to user.
-    const cookieStore = await cookies();
     cookieStore.set("monday_token", tokenJson.access_token, {
       httpOnly: true,
       sameSite: "lax",
@@ -59,6 +62,16 @@ export async function GET(req: NextRequest) {
       path: "/",
       maxAge: 60 * 60 * 24 * 30,
     });
+    // Clear the temporary uid cookie
+    try {
+      cookieStore.set("monday_uid", "", {
+        httpOnly: true,
+        sameSite: "lax",
+        secure: true,
+        path: "/",
+        maxAge: 0,
+      });
+    } catch {}
 
     // If uid is provided, store token in Mongo (and keep Firestore fallback)
     if (uid) {

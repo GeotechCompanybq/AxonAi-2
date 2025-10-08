@@ -28,5 +28,18 @@ export async function GET(req: NextRequest) {
   url.searchParams.set("response_type", "code");
   url.searchParams.set("state", state);
   url.searchParams.set("scope", scope);
-  return NextResponse.redirect(url.toString());
+  const res = NextResponse.redirect(url.toString());
+  // Stash uid for callback fallback in case provider drops state
+  if (uid) {
+    try {
+      res.cookies.set("monday_uid", uid, {
+        httpOnly: true,
+        sameSite: "lax",
+        secure: true,
+        path: "/",
+        maxAge: 60 * 10, // 10 minutes
+      });
+    } catch {}
+  }
+  return res;
 }

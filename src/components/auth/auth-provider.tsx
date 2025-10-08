@@ -184,19 +184,6 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     setIsLoading(false);
   }, [router]);
 
-  // Show loader on initial load or if navigating away from auth pages while still loading
-  if (
-    isLoading &&
-    !pathname.startsWith("/login") &&
-    !pathname.startsWith("/signup")
-  ) {
-    return (
-      <div className="flex min-h-screen items-center justify-center bg-background">
-        <IconSpinner className="h-10 w-10 text-primary" />
-      </div>
-    );
-  }
-
   return (
     <AuthContext.Provider
       value={{
