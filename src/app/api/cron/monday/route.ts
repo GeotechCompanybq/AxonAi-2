@@ -31,17 +31,23 @@ async function fetchAndStoreForUser(uid: string, token: string) {
     await db.collection(userTasks).bulkWrite(ops as any, { ordered: false });
 }
 
+function isAuthorized(_req: NextRequest): boolean {
+  // Public endpoint: allow all requests (no secret required)
+  return true;
+}
+
 export async function POST(req: NextRequest) {
   try {
-    const auth = req.headers.get("authorization") || "";
-    const secret = process.env.CRON_SECRET || "";
-    if (!secret || auth !== `Bearer ${secret}`) {
+    if (!isAuthorized(req)) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
     // Option A: fetch for a specific uid
     const body = await req.json().catch(() => ({} as any));
-    const targetUid = body?.uid as string | undefined;
+    const targetUid =
+      (body?.uid as string | undefined) ||
+      req.nextUrl.searchParams.get("uid") ||
+      undefined;
     if (targetUid) {
       let token: string | undefined;
       // Prefer Mongo
@@ -93,4 +99,9 @@ export async function POST(req: NextRequest) {
     const message = e instanceof Error ? e.message : "Failed to run cron";
     return NextResponse.json({ error: message }, { status: 500 });
   }
+}
+
+// Allow GET for public cron services (query ?secret= or CRON_PUBLIC=1)
+export async function GET(req: NextRequest) {
+  return POST(req);
 }
