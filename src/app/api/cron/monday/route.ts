@@ -89,6 +89,10 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
+    // Fast health-check mode for schedulers that probe with short timeouts
+    const dry = req.nextUrl.searchParams.get("dry") === "1";
+    if (dry) return NextResponse.json({ ok: true, processed: 0 });
+
     // Option A: fetch for a specific uid
     const body = await req.json().catch(() => ({} as any));
     const targetUid =
@@ -151,4 +155,9 @@ export async function POST(req: NextRequest) {
 // Allow GET for public cron services (query ?secret= or CRON_PUBLIC=1)
 export async function GET(req: NextRequest) {
   return POST(req);
+}
+
+// Some schedulers perform a HEAD probe; return quick success
+export async function HEAD(_req: NextRequest) {
+  return new NextResponse(null, { status: 200 });
 }
