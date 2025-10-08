@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { Suspense, useEffect, useState } from "react";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { IconSpinner } from "@/components/icons";
 import { useCurrentOrgId } from "@/hooks/use-current-org-id";
@@ -45,45 +45,53 @@ export default function OrgAnalyticsPage() {
   }, [orgId]);
 
   return (
-    <div className="grid gap-6">
-      <Card>
-        <CardHeader>
-          <CardTitle>Organization Analytics</CardTitle>
-        </CardHeader>
-        <CardContent>
-          {!orgId && (
-            <div className="text-sm text-muted-foreground">
-              Select an organization to view team-wide analytics.
-            </div>
-          )}
-          {orgId && loading && (
-            <div className="flex items-center gap-2 text-sm text-muted-foreground">
-              <IconSpinner className="h-4 w-4" /> Loading analytics...
-            </div>
-          )}
-          {orgId && error && (
-            <div className="text-sm text-red-500">{error}</div>
-          )}
-          {orgId && !loading && !error && metrics && (
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              {Object.entries(metrics).map(([key, value]) => (
-                <div key={key} className="rounded-lg border p-4">
-                  <div className="text-xs text-muted-foreground">{key}</div>
-                  <div className="text-2xl font-bold">{value}</div>
-                </div>
-              ))}
-              {typeof balance === "number" && (
-                <div className="rounded-lg border p-4">
-                  <div className="text-xs text-muted-foreground">
-                    Balance Score
+    <Suspense
+      fallback={
+        <div className="flex items-center gap-2 text-sm text-muted-foreground p-4">
+          <IconSpinner className="h-4 w-4" /> Loading analytics...
+        </div>
+      }
+    >
+      <div className="grid gap-6">
+        <Card>
+          <CardHeader>
+            <CardTitle>Organization Analytics</CardTitle>
+          </CardHeader>
+          <CardContent>
+            {!orgId && (
+              <div className="text-sm text-muted-foreground">
+                Select an organization to view team-wide analytics.
+              </div>
+            )}
+            {orgId && loading && (
+              <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                <IconSpinner className="h-4 w-4" /> Loading analytics...
+              </div>
+            )}
+            {orgId && error && (
+              <div className="text-sm text-red-500">{error}</div>
+            )}
+            {orgId && !loading && !error && metrics && (
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                {Object.entries(metrics).map(([key, value]) => (
+                  <div key={key} className="rounded-lg border p-4">
+                    <div className="text-xs text-muted-foreground">{key}</div>
+                    <div className="text-2xl font-bold">{value}</div>
                   </div>
-                  <div className="text-2xl font-bold">{balance}</div>
-                </div>
-              )}
-            </div>
-          )}
-        </CardContent>
-      </Card>
-    </div>
+                ))}
+                {typeof balance === "number" && (
+                  <div className="rounded-lg border p-4">
+                    <div className="text-xs text-muted-foreground">
+                      Balance Score
+                    </div>
+                    <div className="text-2xl font-bold">{balance}</div>
+                  </div>
+                )}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      </div>
+    </Suspense>
   );
 }
