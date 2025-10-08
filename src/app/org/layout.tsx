@@ -12,7 +12,7 @@ import { FloatingChatBot } from "@/components/chat/floating-chatbot";
 import { SidebarProvider, SidebarInset } from "@/components/ui/sidebar";
 import { useCurrentOrgId } from "@/hooks/use-current-org-id";
 
-export default function OrgLayout({ children }: { children: React.ReactNode }) {
+function OrgLayoutInner({ children }: { children: React.ReactNode }) {
   const { user, isLoading } = useAuth();
   const router = useRouter();
   const { orgId } = useCurrentOrgId();
@@ -52,6 +52,29 @@ export default function OrgLayout({ children }: { children: React.ReactNode }) {
   }
 
   return (
+    <SidebarProvider defaultOpen={false}>
+      <OrgSidebar />
+      <SidebarInset className="flex flex-col min-h-screen ai-grid-bg">
+        <AppHeader />
+        <main
+          className="flex-1 p-4 md:p-8 overflow-auto pb-28 md:pb-8"
+          style={{
+            paddingBottom:
+              "max(128px, calc(env(safe-area-inset-bottom) + 104px))",
+          }}
+        >
+          {children}
+        </main>
+        <AIActionButton />
+        <MobileTabBar />
+        <FloatingChatBot />
+      </SidebarInset>
+    </SidebarProvider>
+  );
+}
+
+export default function OrgLayout({ children }: { children: React.ReactNode }) {
+  return (
     <Suspense
       fallback={
         <div className="flex min-h-screen items-center justify-center bg-background">
@@ -59,24 +82,7 @@ export default function OrgLayout({ children }: { children: React.ReactNode }) {
         </div>
       }
     >
-      <SidebarProvider defaultOpen={false}>
-        <OrgSidebar />
-        <SidebarInset className="flex flex-col min-h-screen ai-grid-bg">
-          <AppHeader />
-          <main
-            className="flex-1 p-4 md:p-8 overflow-auto pb-28 md:pb-8"
-            style={{
-              paddingBottom:
-                "max(128px, calc(env(safe-area-inset-bottom) + 104px))",
-            }}
-          >
-            {children}
-          </main>
-          <AIActionButton />
-          <MobileTabBar />
-          <FloatingChatBot />
-        </SidebarInset>
-      </SidebarProvider>
+      <OrgLayoutInner>{children}</OrgLayoutInner>
     </Suspense>
   );
 }
