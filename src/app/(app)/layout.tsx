@@ -42,13 +42,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
             __html: `window.__AXON_UID__ = ${JSON.stringify(user.uid)};`,
           }}
         />
-        <main
-          className="flex-1 p-4 md:p-8 overflow-auto pb-28 md:pb-8"
-          style={{
-            paddingBottom:
-              "max(128px, calc(env(safe-area-inset-bottom) + 104px))",
-          }}
-        >
+        <main className="flex-1 p-4 md:p-8 overflow-auto pb-28 md:pb-8">
           {children}
         </main>
         {/* Mobile-only nav and AI action */}

@@ -1,28 +1,34 @@
 import { NextRequest, NextResponse } from "next/server";
 import { adminDb } from "@/lib/firebase-admin";
+import { getDb, getCollectionNames } from "@/lib/mongo";
 
 async function fetchAndStoreForUser(uid: string, token: string) {
   const mod = await import("@/app/api/monday/tasks/route");
   const tasks = await mod.fetchMondayTasks(token);
-  const col = adminDb.collection("users").doc(uid).collection("tasks");
-  for (const t of tasks) {
+  const db = await getDb();
+  const { userTasks } = getCollectionNames();
+  const ops = tasks.map((t: any) => {
     const key = `${t.name}|${t.dueDate || ""}|monday`;
     const id = Buffer.from(key).toString("base64").replace(/=+$/g, "");
-    await col.doc(id).set(
-      {
-        source: "monday",
-        name: t.name,
-        description: t.description,
-        dueDate: t.dueDate || null,
-        priority: t.priority,
-        status: t.status,
-        category: t.category,
-        comments: t.comments || [],
-        updatedAt: new Date().toISOString(),
-      },
-      { merge: true }
-    );
-  }
+    const doc = {
+      uid,
+      id,
+      source: "monday",
+      name: t.name,
+      description: t.description,
+      dueDate: t.dueDate || null,
+      priority: t.priority,
+      status: t.status,
+      category: t.category,
+      comments: t.comments || [],
+      updatedAt: new Date().toISOString(),
+    };
+    return {
+      updateOne: { filter: { uid, id }, update: { $set: doc }, upsert: true },
+    } as const;
+  });
+  if (ops.length)
+    await db.collection(userTasks).bulkWrite(ops as any, { ordered: false });
 }
 
 export async function POST(req: NextRequest) {

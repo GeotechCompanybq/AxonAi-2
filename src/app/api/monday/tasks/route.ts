@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { cookies } from "next/headers";
+import { getDb, getCollectionNames } from "@/lib/mongo";
 
 export async function fetchMondayTasks(token: string) {
   // GraphQL helpers and queries
@@ -272,30 +273,39 @@ export async function GET(req: NextRequest) {
     if (!token)
       return NextResponse.json({ error: "Not connected" }, { status: 400 });
     const tasks = await fetchMondayTasks(token);
-    // Upsert tasks into Firestore if uid provided and sync requested
+    // Upsert tasks into Mongo if uid provided and sync requested
     if (uid && doSync) {
       try {
-        const { adminDb } = await import("@/lib/firebase-admin");
-        const col = adminDb.collection("users").doc(uid).collection("tasks");
-        // Write each task by deterministic id (hash of name+dueDate)
-        for (const t of tasks) {
+        const db = await getDb();
+        const { userTasks } = getCollectionNames();
+        const ops = tasks.map((t: any) => {
           const key = `${t.name}|${t.dueDate || ""}|monday`;
           const id = Buffer.from(key).toString("base64").replace(/=+$/g, "");
-          await col.doc(id).set(
-            {
-              source: "monday",
-              name: t.name,
-              description: t.description,
-              dueDate: t.dueDate || null,
-              priority: t.priority,
-              status: t.status,
-              category: t.category,
-              comments: t.comments || [],
-              updatedAt: new Date().toISOString(),
+          const doc = {
+            uid,
+            id,
+            source: "monday",
+            name: t.name,
+            description: t.description,
+            dueDate: t.dueDate || null,
+            priority: t.priority,
+            status: t.status,
+            category: t.category,
+            comments: t.comments || [],
+            updatedAt: new Date().toISOString(),
+          };
+          return {
+            updateOne: {
+              filter: { uid, id },
+              update: { $set: doc },
+              upsert: true,
             },
-            { merge: true }
-          );
-        }
+          } as const;
+        });
+        if (ops.length)
+          await db.collection(userTasks).bulkWrite(ops as any, {
+            ordered: false,
+          });
       } catch (e) {
         console.error("Failed to upsert tasks", e);
       }

@@ -1,5 +1,25 @@
 import { NextRequest, NextResponse } from "next/server";
-import { cookies } from "next/headers";
+import { getDb, getCollectionNames } from "@/lib/mongo";
+
+export async function GET(req: NextRequest) {
+  try {
+    const uid = String(req.nextUrl.searchParams.get("uid") || "").trim();
+    if (!uid)
+      return NextResponse.json({ error: "uid required" }, { status: 400 });
+
+    const db = await getDb();
+    const { userTasks } = getCollectionNames();
+    const items = await db
+      .collection(userTasks)
+      .find({ uid })
+      .project({ _id: 0 })
+      .toArray();
+    return NextResponse.json({ tasks: items });
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : "Failed to load tasks";
+    return NextResponse.json({ error: msg }, { status: 500 });
+  }
+}
 
 export async function POST(req: NextRequest) {
   try {
@@ -10,13 +30,14 @@ export async function POST(req: NextRequest) {
     if (!uid)
       return NextResponse.json({ error: "uid required" }, { status: 400 });
 
-    const { adminDb } = await import("@/lib/firebase-admin");
+    const db = await getDb();
+    const { userTasks } = getCollectionNames();
+    const col = db.collection(userTasks);
 
     // Bulk upsert mode (used by Monday import fallback)
     if (Array.isArray(body?.bulk)) {
       const tasks: any[] = body.bulk;
-      const col = adminDb.collection("users").doc(uid).collection("tasks");
-      const batch = adminDb.batch();
+      const ops = [] as any[];
       for (const t of tasks) {
         const name = String(t?.name || "").trim();
         if (!name) continue;
@@ -26,20 +47,24 @@ export async function POST(req: NextRequest) {
               .toString("base64")
               .replace(/=+$/g, "")
         );
-        const ref = col.doc(id);
-        batch.set(
-          ref,
-          {
-            ...t,
-            source: t?.source || "import",
-            createdAt: new Date().toISOString(),
-            updatedAt: new Date().toISOString(),
+        const doc = {
+          uid,
+          id,
+          ...t,
+          source: t?.source || "import",
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+        };
+        ops.push({
+          updateOne: {
+            filter: { uid, id },
+            update: { $set: doc },
+            upsert: true,
           },
-          { merge: true }
-        );
+        });
       }
-      await batch.commit();
-      return NextResponse.json({ inserted: body.bulk.length });
+      if (ops.length) await col.bulkWrite(ops, { ordered: false });
+      return NextResponse.json({ inserted: ops.length });
     }
 
     // Single task create
@@ -55,20 +80,15 @@ export async function POST(req: NextRequest) {
           .toString("base64")
           .replace(/=+$/g, "")
     );
-    await adminDb
-      .collection("users")
-      .doc(uid)
-      .collection("tasks")
-      .doc(id)
-      .set(
-        {
-          ...task,
-          source: task?.source || "chat",
-          createdAt: new Date().toISOString(),
-          updatedAt: new Date().toISOString(),
-        },
-        { merge: true }
-      );
+    const doc = {
+      uid,
+      id,
+      ...task,
+      source: task?.source || "chat",
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    };
+    await col.updateOne({ uid, id }, { $set: doc }, { upsert: true });
     return NextResponse.json({ id });
   } catch (e) {
     const msg = e instanceof Error ? e.message : "Failed to create task";

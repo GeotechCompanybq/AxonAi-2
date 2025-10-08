@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { cookies } from "next/headers";
+import { getDb, getCollectionNames } from "@/lib/mongo";
 
 async function getHarvestAuth(
   req: NextRequest
@@ -106,30 +107,30 @@ export async function GET(req: NextRequest) {
       const list = data?.time_entries || [];
       if (uid && doSync) {
         try {
-          const { adminDb } = await import("@/lib/firebase-admin");
-          const col = adminDb
-            .collection("users")
-            .doc(uid)
-            .collection("harvestTimesheets");
-          for (const t of list) {
+          const db = await getDb();
+          const { timesheets } = getCollectionNames();
+          const ops = list.map((t: any) => {
             const id = String(
               t?.id ?? `${t?.spent_date}_${t?.user?.id || "me"}`
             );
-            await col
-              .doc(id)
-              .set(
-                { ...t, syncedAt: new Date().toISOString() },
-                { merge: true }
-              );
-            const topId = `${uid}_${id}`;
-            await adminDb
-              .collection("timesheets")
-              .doc(topId)
-              .set(
-                { uid, ...t, syncedAt: new Date().toISOString() },
-                { merge: true }
-              );
-          }
+            const doc = {
+              uid,
+              harvestId: id,
+              ...t,
+              syncedAt: new Date().toISOString(),
+            };
+            return {
+              updateOne: {
+                filter: { uid, harvestId: id },
+                update: { $set: doc },
+                upsert: true,
+              },
+            } as const;
+          });
+          if (ops.length)
+            await db
+              .collection(timesheets)
+              .bulkWrite(ops as any, { ordered: false });
         } catch (e) {
           console.error("Failed to sync timesheets", e);
         }
@@ -152,25 +153,28 @@ export async function GET(req: NextRequest) {
 
     if (uid && doSync) {
       try {
-        const { adminDb } = await import("@/lib/firebase-admin");
-        const col = adminDb
-          .collection("users")
-          .doc(uid)
-          .collection("harvestTimesheets");
-        for (const t of allEntries) {
+        const db = await getDb();
+        const { timesheets } = getCollectionNames();
+        const ops = allEntries.map((t: any) => {
           const id = String(t?.id ?? `${t?.spent_date}_${t?.user?.id || "me"}`);
-          await col
-            .doc(id)
-            .set({ ...t, syncedAt: new Date().toISOString() }, { merge: true });
-          const topId = `${uid}_${id}`;
-          await adminDb
-            .collection("timesheets")
-            .doc(topId)
-            .set(
-              { uid, ...t, syncedAt: new Date().toISOString() },
-              { merge: true }
-            );
-        }
+          const doc = {
+            uid,
+            harvestId: id,
+            ...t,
+            syncedAt: new Date().toISOString(),
+          };
+          return {
+            updateOne: {
+              filter: { uid, harvestId: id },
+              update: { $set: doc },
+              upsert: true,
+            },
+          } as const;
+        });
+        if (ops.length)
+          await db
+            .collection(timesheets)
+            .bulkWrite(ops as any, { ordered: false });
       } catch (e) {
         console.error("Failed to sync timesheets", e);
       }

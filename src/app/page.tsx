@@ -1,23 +1,25 @@
 "use client";
 
-import Link from "next/link";
+import { LandingHeader } from "@/components/landing/Header";
+import { Hero } from "@/components/landing/Hero";
+import { Features } from "@/components/landing/Features";
+import { Demo } from "@/components/landing/Demo";
+import { Testimonials } from "@/components/landing/Testimonials";
+import { Pricing } from "@/components/landing/Pricing";
+import { FinalCta } from "@/components/landing/FinalCta";
+import { LandingFooter } from "@/components/landing/Footer";
 
 export default function HomePage() {
   return (
-    <main className="flex min-h-screen items-center justify-center p-8">
-      <div className="text-center space-y-4">
-        <h1 className="text-2xl font-semibold">Welcome to AxonAI</h1>
-        <p className="text-muted-foreground">Choose where to go:</p>
-        <div className="flex items-center justify-center gap-3">
-          <Link href="/dashboard" className="underline">
-            Open Dashboard
-          </Link>
-          <span className="text-muted-foreground">or</span>
-          <Link href="/login" className="underline">
-            Sign in
-          </Link>
-        </div>
-      </div>
+    <main className="ai-grid-bg">
+      <LandingHeader />
+      <Hero />
+      <Features />
+      <Demo />
+      <Testimonials />
+      <Pricing />
+      <FinalCta />
+      <LandingFooter />
     </main>
   );
 }

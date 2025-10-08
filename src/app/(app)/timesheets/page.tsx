@@ -2,6 +2,7 @@
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { Skeleton } from "@/components/ui/skeleton";
 import { Sparkles, Lock, MoreHorizontal, Pencil, Trash2 } from "lucide-react";
 import {
   Dialog,
@@ -13,7 +14,7 @@ import {
 import { Textarea } from "@/components/ui/textarea";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Input } from "@/components/ui/input";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   Tooltip,
   TooltipContent,
@@ -28,6 +29,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { Checkbox } from "@/components/ui/checkbox";
 
 export default function TimesheetsPage() {
   const [entries, setEntries] = useState<any[]>([]);
@@ -41,6 +43,8 @@ export default function TimesheetsPage() {
   const [optimizing, setOptimizing] = useState(false);
   const [autoFixing, setAutoFixing] = useState(false);
   const [drafts, setDrafts] = useState<any[] | null>(null);
+  const [showPendingDraftsOnly, setShowPendingDraftsOnly] = useState(false);
+  const TARGET_HOURS_PER_DAY = 8;
   function readFirebaseAuthUid(): string | undefined {
     try {
       // Prefer global first
@@ -113,8 +117,8 @@ export default function TimesheetsPage() {
     return () => unsub();
   }, []);
 
-  const fetchEntries = async () => {
-    setIsLoading(true);
+  const fetchEntries = async (silent: boolean = false) => {
+    if (!silent) setIsLoading(true);
     setError(null);
     try {
       const url = new URL("/api/harvest/timesheets", window.location.origin);
@@ -148,12 +152,26 @@ export default function TimesheetsPage() {
     } catch (e: any) {
       setError(e?.message || "Failed to load time entries");
     } finally {
-      setIsLoading(false);
+      if (!silent) setIsLoading(false);
     }
   };
 
   useEffect(() => {
-    fetchEntries();
+    fetchEntries(false);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [range]);
+
+  // background auto-refresh every 60s and when tab becomes visible
+  useEffect(() => {
+    const handleVisibility = () => {
+      if (!document.hidden) void fetchEntries(true);
+    };
+    document.addEventListener("visibilitychange", handleVisibility);
+    const id = window.setInterval(() => void fetchEntries(true), 60_000);
+    return () => {
+      document.removeEventListener("visibilitychange", handleVisibility);
+      window.clearInterval(id);
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [range]);
 
@@ -161,6 +179,43 @@ export default function TimesheetsPage() {
     (sum: number, e: any) => sum + (Number(e.hours) || 0),
     0
   );
+
+  // If today's total hours are below target, request internal draft generation
+  useEffect(() => {
+    const today = new Date().toISOString().slice(0, 10);
+    const r = computeRange();
+    const isTodayRange =
+      ("from" in r && r.from === today && "to" in r && r.to === today) ||
+      ("all" in r && !r.all && range === "day");
+    if (!isTodayRange) return;
+    const currentHours = entries
+      .filter((e: any) => String(e?.spent_date) === today)
+      .reduce((s: number, e: any) => s + (Number(e?.hours) || 0), 0);
+    const targetPerDay = 8; // default daily target
+    if (currentHours >= targetPerDay - 0.001) return;
+    // Trigger reconcile to create internal non-billable drafts for today
+    (async () => {
+      try {
+        const uid = readFirebaseAuthUid();
+        const res = await fetch("/api/harvest/drafts/reconcile", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            uid,
+            from: today,
+            to: today,
+            targetPerDay,
+            defaultHours: 1,
+            internalFallback: true,
+            internalProjectName: "Internal, Administrative",
+          }),
+        });
+        // Silent failure acceptable; drafts will stream into Firestore listener
+        void res;
+      } catch {}
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [entries, range]);
 
   function formatHoursHM(value: any): string {
     const n = Number(value);
@@ -170,6 +225,27 @@ export default function TimesheetsPage() {
     const mm = String(minutes).padStart(2, "0");
     return `${hours}:${mm}`;
   }
+
+  const hoursByDate = useMemo(() => {
+    const map: Record<string, number> = {};
+    for (const e of entries) {
+      const d = String(e?.spent_date || "");
+      if (!d) continue;
+      const h = Number(e?.hours) || 0;
+      map[d] = (map[d] || 0) + h;
+    }
+    return map;
+  }, [entries]);
+
+  const filteredDrafts = useMemo(() => {
+    if (!Array.isArray(drafts)) return [] as any[];
+    if (!showPendingDraftsOnly) return drafts;
+    return drafts.filter((d: any) => {
+      const dateStr = String(d?.spent_date || "");
+      const logged = hoursByDate[dateStr] || 0;
+      return TARGET_HOURS_PER_DAY - logged > 1e-3;
+    });
+  }, [drafts, showPendingDraftsOnly, hoursByDate]);
 
   function isQuarterHour(n: number): boolean {
     return Math.abs(n * 4 - Math.round(n * 4)) < 1e-6;
@@ -466,7 +542,7 @@ export default function TimesheetsPage() {
                   onChange={(e) => setTo(e.target.value)}
                 />
                 <Button
-                  onClick={fetchEntries}
+                  onClick={() => fetchEntries(false)}
                   disabled={isLoading || !from || !to}
                   className="w-full sm:w-auto"
                 >
@@ -475,13 +551,6 @@ export default function TimesheetsPage() {
               </div>
             )}
             <div className="flex flex-col sm:flex-row sm:items-center gap-3 sm:gap-4">
-              <Button
-                onClick={fetchEntries}
-                disabled={isLoading}
-                className="w-full sm:w-auto"
-              >
-                {isLoading ? "Refreshing..." : "Refresh"}
-              </Button>
               <div className="text-sm text-muted-foreground">
                 {entries.length} entries · {totalHours.toFixed(2)} hours
                 {autoFixing && <span className="ml-2">(Auto-fixing…)</span>}
@@ -492,56 +561,98 @@ export default function TimesheetsPage() {
           {/* Drafts panel */}
           {Array.isArray(drafts) && drafts.length > 0 && (
             <div className="border rounded-md p-3 space-y-2 bg-muted/30">
-              <div className="text-sm font-medium">
-                Pending draft timesheets
+              <div className="flex items-center justify-between gap-2">
+                <div className="text-sm font-medium">
+                  Pending draft timesheets
+                </div>
+                <label className="flex items-center gap-2 text-xs text-muted-foreground">
+                  <Checkbox
+                    checked={showPendingDraftsOnly}
+                    onCheckedChange={(v: any) =>
+                      setShowPendingDraftsOnly(Boolean(v))
+                    }
+                  />
+                  <span>Show only days with pending hours</span>
+                </label>
               </div>
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2">
-                {drafts.map((d) => (
-                  <div
-                    key={d.id}
-                    className="border rounded p-2 text-sm flex items-center justify-between gap-2"
-                  >
-                    <div className="truncate">
-                      <div className="font-medium">
-                        {d.spent_date} · {Number(d.hours).toFixed(2)}h
-                      </div>
-                      <div className="text-muted-foreground truncate max-w-[280px]">
-                        {d.notes}
-                      </div>
+              {(() => {
+                const list = filteredDrafts as any[];
+                if (!list || list.length === 0) {
+                  return (
+                    <div className="text-sm text-muted-foreground">
+                      No drafts on days with pending hours.
                     </div>
-                    <div className="shrink-0">
-                      <Button
-                        size="sm"
-                        onClick={async () => {
-                          try {
-                            const res = await fetch("/api/harvest/timesheets", {
-                              method: "POST",
-                              headers: { "Content-Type": "application/json" },
-                              body: JSON.stringify({
-                                spent_date: d.spent_date,
-                                hours: d.hours,
-                                notes: d.notes,
-                              }),
-                            });
-                            if (!res.ok) throw new Error("Create failed");
-                          } catch (e: any) {
-                            setError(
-                              e?.message || "Failed to create timesheet"
-                            );
-                          }
-                        }}
+                  );
+                }
+                return (
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2">
+                    {list.map((d) => (
+                      <div
+                        key={d.id}
+                        className="border rounded p-2 text-sm flex items-center justify-between gap-2"
                       >
-                        Approve
-                      </Button>
-                    </div>
+                        <div className="truncate">
+                          <div className="font-medium">
+                            {d.spent_date} · {Number(d.hours).toFixed(2)}h
+                          </div>
+                          <div className="text-muted-foreground truncate max-w-[280px]">
+                            {d.notes}
+                          </div>
+                        </div>
+                        <div className="shrink-0">
+                          <Button
+                            size="sm"
+                            onClick={async () => {
+                              try {
+                                const res = await fetch(
+                                  "/api/harvest/timesheets",
+                                  {
+                                    method: "POST",
+                                    headers: {
+                                      "Content-Type": "application/json",
+                                    },
+                                    body: JSON.stringify({
+                                      spent_date: d.spent_date,
+                                      hours: d.hours,
+                                      notes: d.notes,
+                                    }),
+                                  }
+                                );
+                                if (!res.ok) throw new Error("Create failed");
+                              } catch (e: any) {
+                                setError(
+                                  e?.message || "Failed to create timesheet"
+                                );
+                              }
+                            }}
+                          >
+                            Approve
+                          </Button>
+                        </div>
+                      </div>
+                    ))}
                   </div>
-                ))}
-              </div>
+                );
+              })()}
             </div>
           )}
           {/* Mobile card list */}
           <div className="grid grid-cols-1 gap-3 md:hidden">
-            {entries.length === 0 && (
+            {isLoading && entries.length === 0 && (
+              <>
+                {Array.from({ length: 4 }).map((_, i) => (
+                  <div key={i} className="border rounded-md p-3 space-y-2">
+                    <div className="flex items-center justify-between">
+                      <Skeleton className="h-4 w-24" />
+                      <Skeleton className="h-4 w-16" />
+                    </div>
+                    <Skeleton className="h-4 w-40" />
+                    <Skeleton className="h-3 w-full" />
+                  </div>
+                ))}
+              </>
+            )}
+            {!isLoading && entries.length === 0 && (
               <div className="p-3 text-sm text-muted-foreground border rounded-md">
                 No entries found.
               </div>
@@ -634,7 +745,31 @@ export default function TimesheetsPage() {
                 </tr>
               </thead>
               <tbody>
-                {entries.length === 0 && (
+                {isLoading &&
+                  entries.length === 0 &&
+                  Array.from({ length: 6 }).map((_, i) => (
+                    <tr key={i} className="border-t">
+                      <td className="p-2">
+                        <Skeleton className="h-4 w-24" />
+                      </td>
+                      <td className="p-2">
+                        <Skeleton className="h-4 w-40" />
+                      </td>
+                      <td className="p-2">
+                        <Skeleton className="h-4 w-32" />
+                      </td>
+                      <td className="p-2 text-right">
+                        <Skeleton className="h-4 w-14 ml-auto" />
+                      </td>
+                      <td className="p-2">
+                        <Skeleton className="h-4 w-full" />
+                      </td>
+                      <td className="p-2 text-right">
+                        <Skeleton className="h-8 w-8 ml-auto rounded" />
+                      </td>
+                    </tr>
+                  ))}
+                {!isLoading && entries.length === 0 && (
                   <tr>
                     <td className="p-3 text-muted-foreground" colSpan={6}>
                       No entries found.

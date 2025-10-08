@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { cookies } from "next/headers";
+import { getDb, getCollectionNames } from "@/lib/mongo";
 
 // Reuse Monday tasks fetcher by importing from the route file
 // We exported fetchMondayTasks there.
@@ -110,6 +111,10 @@ export async function POST(req: NextRequest) {
     const to = (body?.to || "").trim();
     const defaultHours = Number(body?.defaultHours ?? 1);
     const targetPerDay = Number(body?.targetPerDay ?? 8);
+    const internalFallback = Boolean(body?.internalFallback);
+    const internalProjectName = String(
+      body?.internalProjectName || "Internal, Administrative"
+    );
     if (!from || !to) {
       return NextResponse.json(
         { error: "from and to are required (YYYY-MM-DD)" },
@@ -222,22 +227,78 @@ export async function POST(req: NextRequest) {
           status: "draft",
         });
       }
+
+      // If still missing after Monday distribution, optionally fall back to internal non-billable
+      if (internalFallback && missing > 0.001) {
+        // Try to infer Harvest project/task IDs from existing entries in-range
+        let inferredProjectId: string | undefined;
+        let inferredTaskId: string | undefined;
+        for (const e of harvestEntries) {
+          const projName = String(e?.project?.name || "");
+          if (projName.toLowerCase() === internalProjectName.toLowerCase()) {
+            if (e?.project?.id) inferredProjectId = String(e.project.id);
+            if (e?.task?.id) inferredTaskId = String(e.task.id);
+            break;
+          }
+        }
+
+        const internalNotesPool = [
+          "Team knowledge base maintenance and internal documentation updates",
+          "Process improvement: refining QA checklists and deployment runbooks",
+          "Security review: updating dependency advisories and patch notes",
+          "Dev tooling maintenance: scripts, linters, and CI configuration",
+          "Internal meeting prep and follow-ups; stakeholder notes consolidation",
+          "Backlog grooming and ticket triage for upcoming sprints",
+          "Environment maintenance: staging data refresh and sanity checks",
+          "On-call readiness: runbook review and alert routing tests",
+          "Release coordination tasks and retrospective action items",
+          "Vendor admin and account housekeeping (non-billable)",
+        ];
+
+        // Allocate in 0.5–2.0h chunks until missing hours are covered
+        const pickNote = (i: number) =>
+          internalNotesPool[i % internalNotesPool.length];
+        let idx = 0;
+        while (missing > 0.001) {
+          const chunk = roundQuarter(
+            Math.min(missing, Math.max(0.5, Math.min(2, missing)))
+          );
+          const id = `internal_${date}_${idx}`;
+          const note = `${internalProjectName} — ${pickNote(idx)}`.slice(
+            0,
+            255
+          );
+          drafts.push({
+            id,
+            spent_date: date,
+            hours: chunk,
+            notes: note,
+            source: "monday",
+            createdAt: new Date().toISOString(),
+            status: "draft",
+          });
+          missing = Math.max(0, roundQuarter(missing - chunk));
+          idx++;
+        }
+      }
     }
 
-    // Persist drafts for manual approval
+    // Persist drafts for manual approval (Mongo)
     if (uid && drafts.length > 0) {
       try {
-        const { adminDb } = await import("@/lib/firebase-admin");
-        const col = adminDb
-          .collection("users")
-          .doc(uid)
-          .collection("timesheetDrafts");
-        const batch = adminDb.batch();
-        for (const d of drafts) {
-          const ref = col.doc(d.id);
-          batch.set(ref, d, { merge: true });
-        }
-        await batch.commit();
+        const db = await getDb();
+        const { timesheetDrafts } = getCollectionNames();
+        const ops = drafts.map((d) => ({
+          updateOne: {
+            filter: { uid, id: d.id },
+            update: { $set: { uid, ...d } },
+            upsert: true,
+          },
+        }));
+        if (ops.length)
+          await db
+            .collection(timesheetDrafts)
+            .bulkWrite(ops as any, { ordered: false });
       } catch (e) {
         console.error("Failed to persist drafts", e);
       }

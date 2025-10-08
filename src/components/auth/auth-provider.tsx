@@ -59,11 +59,10 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     return () => unsubscribe();
   }, []);
 
-  // Ensure redirect to dashboard after successful auth on mobile redirect flows
+  // Redirect from auth pages only (not from landing "/") after successful auth
   useEffect(() => {
     if (!isLoading && user) {
       const onAuthPages =
-        pathname === "/" ||
         pathname.startsWith("/login") ||
         pathname.startsWith("/signup") ||
         pathname.startsWith("/org/login");
@@ -81,7 +80,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
             window.sessionStorage.removeItem("postLoginRedirect");
           } catch {}
         }
-        // Only redirect if we're truly on a landing/auth page. Preserve deep links.
+        // Only redirect if we're truly on an auth page. Preserve landing and deep links.
         router.replace(destination);
       }
     }

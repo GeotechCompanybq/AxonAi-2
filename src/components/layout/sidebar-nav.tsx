@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { useState } from "react";
 import {
   LayoutDashboard,
   CalendarPlus,
@@ -14,6 +15,7 @@ import {
   Clock4,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { useSidebar } from "@/components/ui/sidebar";
 import {
   SidebarMenu,
   SidebarMenuItem,
@@ -39,6 +41,9 @@ const secondaryNavItems = [
 
 export function SidebarNav() {
   const pathname = usePathname();
+  const { setOpen } = useSidebar();
+  const [showTsPanel, setShowTsPanel] = useState(false);
+  const [panelTop, setPanelTop] = useState(0);
 
   const renderNavItems = (
     items: typeof mainNavItems // Use a more general type or typeof secondaryNavItems if they differ
@@ -48,7 +53,25 @@ export function SidebarNav() {
         pathname === item.href ||
         (item.href !== "/dashboard" && pathname.startsWith(item.href));
       return (
-        <SidebarMenuItem key={item.href}>
+        <SidebarMenuItem
+          key={item.href}
+          onMouseEnter={(e) => {
+            if (item.href === "/timesheets") {
+              const rect = (
+                e.currentTarget as HTMLElement
+              ).getBoundingClientRect();
+              setPanelTop(Math.round(rect.top));
+              setShowTsPanel(true);
+              setOpen(true);
+            }
+          }}
+          onMouseLeave={(e) => {
+            if (item.href === "/timesheets") {
+              // Slight delay to allow moving into the panel
+              setTimeout(() => setShowTsPanel(false), 80);
+            }
+          }}
+        >
           <Link href={item.href} legacyBehavior passHref>
             <SidebarMenuButton
               isActive={isActive}
@@ -72,6 +95,58 @@ export function SidebarNav() {
               </span>
             </SidebarMenuButton>
           </Link>
+          {/* Hover slide-out for Timesheets */}
+          {item.href === "/timesheets" && (
+            <div
+              onMouseEnter={() => setShowTsPanel(true)}
+              onMouseLeave={() => setShowTsPanel(false)}
+              className={cn(
+                "fixed z-40 w-64",
+                "transition-all duration-200",
+                showTsPanel
+                  ? "opacity-100 translate-x-0 pointer-events-auto"
+                  : "opacity-0 translate-x-2 pointer-events-none"
+              )}
+              style={{
+                left: "calc(var(--sidebar-width) + 8px)",
+                top: panelTop,
+              }}
+            >
+              <div className="rounded-2xl border border-white/10 bg-background/90 backdrop-blur shadow-xl p-2">
+                <div className="text-xs uppercase tracking-wide text-muted-foreground px-2 py-1">
+                  Timesheets
+                </div>
+                <ul className="space-y-1">
+                  <li>
+                    <Link
+                      href="/timesheets"
+                      className={cn(
+                        "block rounded-md px-3 py-2 text-sm",
+                        pathname === "/timesheets"
+                          ? "bg-primary/15 text-primary border border-primary/20"
+                          : "hover:bg-primary/10"
+                      )}
+                    >
+                      Timesheets
+                    </Link>
+                  </li>
+                  <li>
+                    <Link
+                      href="/timesheets/drafts"
+                      className={cn(
+                        "block rounded-md px-3 py-2 text-sm",
+                        pathname === "/timesheets/drafts"
+                          ? "bg-primary/15 text-primary border border-primary/20"
+                          : "hover:bg-primary/10"
+                      )}
+                    >
+                      Timesheet Drafts
+                    </Link>
+                  </li>
+                </ul>
+              </div>
+            </div>
+          )}
         </SidebarMenuItem>
       );
     });
