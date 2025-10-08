@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { adminDb } from "@/lib/firebase-admin";
 import { getDb, getCollectionNames } from "@/lib/mongo";
 import { EmailNotificationService } from "@/lib/email-notifications";
+import { runMondaySync } from "@/jobs/monday-sync";
 
 // Ensure long-running cron can complete
 export const runtime = "nodejs";
@@ -93,59 +94,18 @@ export async function POST(req: NextRequest) {
     const dry = req.nextUrl.searchParams.get("dry") === "1";
     if (dry) return NextResponse.json({ ok: true, processed: 0 });
 
-    // Option A: fetch for a specific uid
     const body = await req.json().catch(() => ({} as any));
     const targetUid =
       (body?.uid as string | undefined) ||
       req.nextUrl.searchParams.get("uid") ||
       undefined;
-    if (targetUid) {
-      let token: string | undefined;
-      // Prefer Mongo
-      try {
-        const db = await getDb();
-        const { users } = getCollectionNames();
-        const doc = await db.collection(users).findOne({ uid: targetUid });
-        token = (doc as any)?.monday?.accessToken as string | undefined;
-      } catch {}
-      // Fallback Firestore
-      if (!token) {
-        const userSnap = await adminDb.collection("users").doc(targetUid).get();
-        token = userSnap.get("monday.accessToken") as string | undefined;
-      }
-      if (!token)
-        return NextResponse.json({ error: "No token" }, { status: 400 });
-      await fetchAndStoreForUser(targetUid, token);
-      return NextResponse.json({ ok: true, processed: 1 });
+    const result = await runMondaySync({ uid: targetUid });
+    if ((result as any)?.error) {
+      return NextResponse.json(result as any, {
+        status: (result as any).status || 400,
+      });
     }
-
-    // Option B: fetch for all users that have a Monday token
-    // Option B: iterate tokens from Mongo users first, fallback to Firestore users
-    let processed = 0;
-    try {
-      const db = await getDb();
-      const { users } = getCollectionNames();
-      const cursor = db
-        .collection(users)
-        .find({ "monday.accessToken": { $exists: true } });
-      for await (const doc of cursor) {
-        const uid = String((doc as any)?.uid || "");
-        const token = (doc as any)?.monday?.accessToken as string | undefined;
-        if (!uid || !token) continue;
-        await fetchAndStoreForUser(uid, token);
-        processed++;
-      }
-    } catch {}
-    if (processed === 0) {
-      const usersSnap = await adminDb.collection("users").get();
-      for (const doc of usersSnap.docs) {
-        const token = doc.get("monday.accessToken") as string | undefined;
-        if (!token) continue;
-        await fetchAndStoreForUser(doc.id, token);
-        processed++;
-      }
-    }
-    return NextResponse.json({ ok: true, processed });
+    return NextResponse.json(result as any);
   } catch (e) {
     const message = e instanceof Error ? e.message : "Failed to run cron";
     return NextResponse.json({ error: message }, { status: 500 });
