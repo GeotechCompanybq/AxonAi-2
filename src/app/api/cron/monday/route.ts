@@ -2,6 +2,12 @@ import { NextRequest, NextResponse } from "next/server";
 import { adminDb } from "@/lib/firebase-admin";
 import { getDb, getCollectionNames } from "@/lib/mongo";
 
+// Ensure long-running cron can complete
+export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
+export const maxDuration = 300; // extend to 5 minutes (platform max)
+
 async function fetchAndStoreForUser(uid: string, token: string) {
   const mod = await import("@/app/api/monday/tasks/route");
   const tasks = await mod.fetchMondayTasks(token);
