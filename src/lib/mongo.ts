@@ -24,6 +24,10 @@ export async function getMongoClient(): Promise<MongoClient> {
     },
     // Use a modest pool suitable for serverless edge-like workloads too
     maxPoolSize: 10,
+    serverSelectionTimeoutMS: Number(
+      process.env.MONGO_SERVER_SELECTION_TIMEOUT_MS || 45000
+    ),
+    connectTimeoutMS: Number(process.env.MONGO_CONNECT_TIMEOUT_MS || 45000),
   });
 
   connectingPromise = client
