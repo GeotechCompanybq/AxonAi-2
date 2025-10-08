@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { adminDb } from "@/lib/firebase-admin";
 import { getDb, getCollectionNames } from "@/lib/mongo";
+import { EmailNotificationService } from "@/lib/email-notifications";
 
 // Ensure long-running cron can complete
 export const runtime = "nodejs";
@@ -12,7 +13,8 @@ async function fetchAndStoreForUser(uid: string, token: string) {
   const mod = await import("@/app/api/monday/tasks/route");
   const tasks = await mod.fetchMondayTasks(token);
   const db = await getDb();
-  const { userTasks } = getCollectionNames();
+  const { userTasks, users } = getCollectionNames();
+  let newlyInserted = 0;
   const ops = tasks.map((t: any) => {
     const key = `${t.name}|${t.dueDate || ""}|monday`;
     const id = Buffer.from(key).toString("base64").replace(/=+$/g, "");
@@ -30,11 +32,50 @@ async function fetchAndStoreForUser(uid: string, token: string) {
       updatedAt: new Date().toISOString(),
     };
     return {
-      updateOne: { filter: { uid, id }, update: { $set: doc }, upsert: true },
+      updateOne: {
+        filter: { uid, id },
+        update: [
+          {
+            $set: doc,
+          },
+          // Track inserts by checking if prior doc existed
+        ],
+        upsert: true,
+      },
     } as const;
   });
-  if (ops.length)
-    await db.collection(userTasks).bulkWrite(ops as any, { ordered: false });
+  if (ops.length) {
+    const bulkRes: any = await db
+      .collection(userTasks)
+      .bulkWrite(ops as any, { ordered: false });
+    newlyInserted = Number(bulkRes?.upsertedCount || 0);
+  }
+
+  // If new tasks were inserted, send a concise email to the user
+  if (newlyInserted > 0) {
+    try {
+      const userDoc = await db.collection(users).findOne({ uid });
+      const email = (userDoc as any)?.email as string | undefined;
+      if (email) {
+        const safeCount = Math.min(newlyInserted, tasks.length);
+        const previewNames = tasks
+          .slice(0, 3)
+          .map((t: any) => String(t?.name || "Untitled"))
+          .join(", ");
+        await EmailNotificationService.sendEmail({
+          to: email,
+          subject: `New tasks imported from Monday.com (${safeCount})`,
+          htmlBody: `
+            <p>We imported <strong>${safeCount}</strong> new task(s) from Monday.com into your workspace.</p>
+            <p style="color:#94a3b8;font-size:12px">Recent: ${previewNames}</p>
+            <p><a href="/tasks">Open Tasks</a></p>
+          `,
+        });
+      }
+    } catch (e) {
+      console.error("Failed to send Monday new-tasks email", e);
+    }
+  }
 }
 
 function isAuthorized(_req: NextRequest): boolean {
