@@ -1,4 +1,7 @@
-import "dotenv/config";
+import dotenv from "dotenv";
+// Load default .env, then .env.local (override) for local runs
+dotenv.config();
+dotenv.config({ path: ".env.local", override: true });
 import cron from "node-cron";
 import { runMondaySync } from "@/jobs/monday-sync";
 
@@ -13,7 +16,17 @@ async function main() {
     }
   }
 
-  const schedule = process.env.WORKER_CRON || "*/15 * * * *"; // every 15 minutes
+  let schedule = process.env.WORKER_CRON || "*/15 * * * *"; // every 15 minutes
+  if (!(cron as any).validate?.(schedule)) {
+    // Common mistake: "/15 * * * *" missing the leading '*'
+    if (schedule.startsWith("/")) schedule = `*${schedule}`;
+    if (!(cron as any).validate?.(schedule)) {
+      console.warn(
+        `[worker] invalid WORKER_CRON="${process.env.WORKER_CRON}"; falling back to */15 * * * *`
+      );
+      schedule = "*/15 * * * *";
+    }
+  }
   console.log(`[worker] scheduling monday sync: ${schedule}`);
 
   cron.schedule(schedule, async () => {
