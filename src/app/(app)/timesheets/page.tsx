@@ -442,61 +442,24 @@ export default function TimesheetsPage() {
     setOptimizing(true);
     setError(null);
     try {
-      const prompt = [
-        "Rewrite the following timesheet note in a concise, professional tone suitable for client-facing records.",
-        "- Keep it factual and specific.",
-        "- Avoid greetings/salutations and filler.",
-        "- Prefer first-person past tense and ≤ 25 words when possible.",
-        "- Preserve key details (project, task, deliverable, timeframe).",
-        "- Respond with ONLY the rewritten note text. No prefixes or quotes.",
-        "\nOriginal note:\n\n" + editNotes,
-      ].join("\n");
-      const res = await fetch("/api/chat", {
+      const res = await fetch("/api/ai/notes-enhancer", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ messages: [{ role: "user", content: prompt }] }),
+        body: JSON.stringify({ notes: editNotes }),
       });
       if (!res.ok) {
-        let message = "Optimize failed";
+        let message = "Enhance failed";
         try {
           const json = await res.json();
           message = json?.error || message;
         } catch {}
         throw new Error(message);
       }
-      // Be resilient to different response shapes: {reply}, {response}, string, or nested {output}
-      const rawText = await res.text();
-      let parsed: any;
-      try {
-        parsed = JSON.parse(rawText);
-      } catch {
-        parsed = rawText;
-      }
-
-      function extractText(d: any): string | null {
-        if (!d) return null;
-        if (typeof d === "string") return d;
-        if (typeof d.reply === "string") return d.reply;
-        if (typeof d.response === "string") return d.response;
-        if (d.output) return extractText(d.output);
-        return null;
-      }
-      const text = extractText(parsed)?.trim();
-      if (text) {
-        const cleaned = text
-          // Remove leading explanatory prefixes like "Rewrote timesheet note:"
-          .replace(
-            /^(?:rewrote(?:\s+timesheet\s+note)?|rewritten(?:\s+timesheet\s+note)?|updated\s+note|optimized\s+note|note|timesheet\s+note|professional\s+rewrite|rephrased)\s*:\s*/i,
-            ""
-          )
-          // Strip wrapping quotes
-          .replace(/^["'`“”]+/, "")
-          .replace(/["'`“”]+$/, "")
-          .trim();
-        if (cleaned) setEditNotes(cleaned);
-      }
+      const json = await res.json();
+      const comment = (json?.comment || "").trim();
+      if (comment) setEditNotes(comment);
     } catch (e: any) {
-      setError(e?.message || "Failed to optimize note");
+      setError(e?.message || "Failed to enhance note");
     } finally {
       setOptimizing(false);
     }
