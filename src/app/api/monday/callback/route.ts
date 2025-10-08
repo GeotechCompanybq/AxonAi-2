@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { cookies } from "next/headers";
+import { getDb, getCollectionNames } from "@/lib/mongo";
 
 export async function GET(req: NextRequest) {
   try {
@@ -59,22 +60,22 @@ export async function GET(req: NextRequest) {
       maxAge: 60 * 60 * 24 * 30,
     });
 
-    // If uid is provided, store token in Firestore
+    // If uid is provided, store token in Mongo (and keep Firestore fallback)
     if (uid) {
       try {
-        const { adminDb } = await import("@/lib/firebase-admin");
-        await adminDb
-          .collection("users")
-          .doc(uid)
-          .set(
-            {
-              monday: {
-                accessToken: tokenJson.access_token,
-                updatedAt: Date.now(),
-              },
+        const db = await getDb();
+        const { users } = getCollectionNames();
+        await db.collection(users).updateOne(
+          { uid },
+          {
+            $set: {
+              uid,
+              "monday.accessToken": tokenJson.access_token,
+              "monday.updatedAt": Date.now(),
             },
-            { merge: true }
-          );
+          },
+          { upsert: true }
+        );
       } catch (err) {
         console.error("failed to persist monday token in db", err);
       }

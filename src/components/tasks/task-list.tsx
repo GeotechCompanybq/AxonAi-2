@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import type { Task, TaskStatus } from "@/types";
 import { TaskItem } from "./task-item";
 import { Button } from "@/components/ui/button";
@@ -29,6 +29,7 @@ import {
   saveTasksToLocalStorage,
 } from "@/lib/task-storage";
 import { Card, CardContent } from "@/components/ui/card"; // Added Card imports
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 
 // Sample initial tasks for demonstration - will be overridden by localStorage if present
 const fallbackInitialTasks: Task[] = [
@@ -63,11 +64,85 @@ export function TaskList() {
 
   const { toast } = useToast();
 
+  function readFirebaseAuthUid(): string | undefined {
+    try {
+      const globalUid = (window as any)?.__AXON_UID__;
+      if (globalUid) return String(globalUid);
+      for (let i = 0; i < window.localStorage.length; i++) {
+        const key = window.localStorage.key(i) || "";
+        if (key.startsWith("firebase:authUser")) {
+          const raw = window.localStorage.getItem(key);
+          if (!raw) continue;
+          try {
+            const obj = JSON.parse(raw);
+            if (obj?.uid) return String(obj.uid);
+          } catch {}
+        }
+      }
+    } catch {}
+    return undefined;
+  }
+
+  const uid = useMemo(() => {
+    if (typeof window === "undefined") return undefined;
+    return readFirebaseAuthUid();
+  }, []);
+
   useEffect(() => {
     const loadedTasks = getTasksFromLocalStorage();
     setTasks(loadedTasks.length > 0 ? loadedTasks : fallbackInitialTasks);
     setIsLoaded(true);
   }, []);
+
+  const queryClient = useQueryClient();
+
+  const tasksQuery = useQuery({
+    queryKey: ["tasks", uid],
+    enabled: Boolean(uid),
+    queryFn: async () => {
+      const url = new URL("/api/tasks", window.location.origin);
+      if (uid) url.searchParams.set("uid", uid);
+      const res = await fetch(url.toString(), { cache: "no-store" });
+      if (!res.ok) {
+        const j = await res.json().catch(() => ({}));
+        throw new Error(j?.error || "Failed to load tasks");
+      }
+      const json = await res.json();
+      const list = Array.isArray(json?.tasks) ? (json.tasks as Task[]) : [];
+      return list;
+    },
+    refetchInterval: 15000,
+    refetchOnWindowFocus: true,
+  });
+
+  useEffect(() => {
+    const list = tasksQuery.data as Task[] | undefined;
+    if (Array.isArray(list) && list.length) {
+      setTasks(list);
+      try {
+        saveTasksToLocalStorage(list);
+      } catch {}
+    }
+  }, [tasksQuery.data]);
+
+  const upsertTask = useMutation({
+    mutationFn: async (task: Task) => {
+      if (!uid) return;
+      const res = await fetch("/api/tasks", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ uid, task }),
+      });
+      if (!res.ok) {
+        const j = await res.json().catch(() => ({}));
+        throw new Error(j?.error || "Failed to save task");
+      }
+      return await res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["tasks", uid] });
+    },
+  });
 
   // Persist tasks to localStorage whenever the tasks array changes
   useEffect(() => {
@@ -81,6 +156,10 @@ export function TaskList() {
     setTasks((prevTasks) =>
       prevTasks.map((task) => (task.id === taskId ? { ...task, status } : task))
     );
+    try {
+      const t = tasks.find((x) => x.id === taskId);
+      if (t) upsertTask.mutate({ ...t, status } as Task);
+    } catch {}
     toast({
       title: "Task Updated",
       description: `Task status changed to ${status}.`,
@@ -126,6 +205,12 @@ export function TaskList() {
           t.id === editingTask.id ? ({ ...t, ...newTask } as Task) : t
         )
       );
+      try {
+        upsertTask.mutate({
+          ...(editingTask as Task),
+          ...(newTask as any),
+        } as Task);
+      } catch {}
       toast({
         title: "Task Updated",
         description: "Your task has been successfully updated.",
@@ -138,6 +223,9 @@ export function TaskList() {
         status: newTask.status || "todo",
       };
       setTasks((prevTasks) => [taskToAdd, ...prevTasks]);
+      try {
+        upsertTask.mutate(taskToAdd);
+      } catch {}
       toast({
         title: "Task Added",
         description: "New task successfully created.",

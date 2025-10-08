@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { cookies } from "next/headers";
+import { getDb, getCollectionNames } from "@/lib/mongo";
 
 export async function GET(req: NextRequest) {
   try {
@@ -50,23 +51,23 @@ export async function GET(req: NextRequest) {
       maxAge: tokenJson.expires_in || 60 * 60 * 24 * 30, // default 30 days
     });
 
-    // If user ID is provided, store token in Firestore
+    // If user ID is provided, store token in Mongo
     if (uid) {
       try {
-        const { adminDb } = await import("@/lib/firebase-admin");
-        await adminDb
-          .collection("users")
-          .doc(uid)
-          .set(
-            {
-              jira: {
-                accessToken: tokenJson.access_token,
-                refreshToken: tokenJson.refresh_token,
-                updatedAt: Date.now(),
-              },
+        const db = await getDb();
+        const { users } = getCollectionNames();
+        await db.collection(users).updateOne(
+          { uid },
+          {
+            $set: {
+              uid,
+              "jira.accessToken": tokenJson.access_token,
+              "jira.refreshToken": tokenJson.refresh_token,
+              "jira.updatedAt": Date.now(),
             },
-            { merge: true }
-          );
+          },
+          { upsert: true }
+        );
       } catch (err) {
         console.error("Failed to persist Jira token in DB", err);
       }

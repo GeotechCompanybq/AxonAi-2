@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { cookies } from "next/headers";
+import { getDb, getCollectionNames } from "@/lib/mongo";
 
 export async function GET(req: NextRequest) {
   try {
@@ -92,25 +93,25 @@ export async function GET(req: NextRequest) {
       // Ignore; a later API call can attempt to resolve account id lazily
     }
 
-    // Optionally persist in Firestore when uid is present
+    // Optionally persist in Mongo when uid is present
     if (uid) {
       try {
-        const { adminDb } = await import("@/lib/firebase-admin");
-        await adminDb
-          .collection("users")
-          .doc(uid)
-          .set(
-            {
-              harvest: {
-                accessToken: tokenJson.access_token,
-                refreshToken: tokenJson.refresh_token,
-                accountId: accountId || null,
-                tokenType: tokenJson.token_type || "Bearer",
-                updatedAt: Date.now(),
-              },
+        const db = await getDb();
+        const { users } = getCollectionNames();
+        await db.collection(users).updateOne(
+          { uid },
+          {
+            $set: {
+              uid,
+              "harvest.accessToken": tokenJson.access_token,
+              "harvest.refreshToken": tokenJson.refresh_token,
+              "harvest.accountId": accountId || null,
+              "harvest.tokenType": tokenJson.token_type || "Bearer",
+              "harvest.updatedAt": Date.now(),
             },
-            { merge: true }
-          );
+          },
+          { upsert: true }
+        );
       } catch (err) {
         console.error("Failed to persist Harvest token in DB", err);
       }
