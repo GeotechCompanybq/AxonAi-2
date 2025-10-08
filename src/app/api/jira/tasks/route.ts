@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { cookies } from "next/headers";
+import { getDb, getCollectionNames } from "@/lib/mongo";
 import { EmailNotificationService } from "@/lib/email-notifications";
 
 async function fetchAccessibleSites(token: string) {
@@ -191,37 +192,48 @@ export async function GET(req: NextRequest) {
     if (!token) {
       const uid = req.nextUrl.searchParams.get("uid") || undefined;
       if (uid) {
+        // Prefer Mongo
+        let refreshToken: string | undefined;
         try {
-          const { adminDb } = await import("@/lib/firebase-admin");
-          const snap = await adminDb.collection("users").doc(uid).get();
-          token = snap.get("jira.accessToken") as string | undefined;
-          const refreshToken = snap.get("jira.refreshToken") as
-            | string
-            | undefined;
-
-          // Attempt token refresh if access token is invalid
-          if (!token && refreshToken) {
-            const refreshedTokenData = await refreshJiraToken(refreshToken);
-            if (refreshedTokenData) {
-              token = refreshedTokenData.access_token;
-              // Update tokens in Firestore
-              await adminDb
-                .collection("users")
-                .doc(uid)
-                .set(
-                  {
-                    jira: {
-                      accessToken: refreshedTokenData.access_token,
-                      refreshToken: refreshedTokenData.refresh_token,
-                      updatedAt: Date.now(),
-                    },
-                  },
-                  { merge: true }
-                );
-            }
+          const db = await getDb();
+          const { users } = getCollectionNames();
+          const doc = await db.collection(users).findOne({ uid });
+          token = (doc as any)?.jira?.accessToken as string | undefined;
+          refreshToken = (doc as any)?.jira?.refreshToken as string | undefined;
+        } catch {}
+        // Firestore fallback
+        if (!token) {
+          try {
+            const { adminDb } = await import("@/lib/firebase-admin");
+            const snap = await adminDb.collection("users").doc(uid).get();
+            token = snap.get("jira.accessToken") as string | undefined;
+            refreshToken = snap.get("jira.refreshToken") as string | undefined;
+          } catch (err) {
+            console.error("Error retrieving Jira token:", err);
           }
-        } catch (err) {
-          console.error("Error retrieving Jira token:", err);
+        }
+        // Attempt token refresh if access token is missing but refresh exists
+        if (!token && refreshToken) {
+          const refreshed = await refreshJiraToken(refreshToken);
+          if (refreshed) {
+            token = refreshed.access_token;
+            try {
+              const db = await getDb();
+              const { users } = getCollectionNames();
+              await db.collection(users).updateOne(
+                { uid },
+                {
+                  $set: {
+                    uid,
+                    "jira.accessToken": refreshed.access_token,
+                    "jira.refreshToken": refreshed.refresh_token,
+                    "jira.updatedAt": Date.now(),
+                  },
+                },
+                { upsert: true }
+              );
+            } catch {}
+          }
         }
       }
     }

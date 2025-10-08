@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useState } from "react";
+import { useCallback, useState } from "react";
 import {
   LayoutDashboard,
   CalendarPlus,
@@ -44,6 +44,12 @@ export function SidebarNav() {
   const { setOpen } = useSidebar();
   const [showTsPanel, setShowTsPanel] = useState(false);
   const [panelTop, setPanelTop] = useState(0);
+  const [pinnedTs, setPinnedTs] = useState(false);
+
+  const openTs = useCallback(() => setShowTsPanel(true), []);
+  const closeTs = useCallback(() => {
+    if (!pinnedTs) setShowTsPanel(false);
+  }, [pinnedTs]);
 
   const renderNavItems = (
     items: typeof mainNavItems // Use a more general type or typeof secondaryNavItems if they differ
@@ -61,14 +67,14 @@ export function SidebarNav() {
                 e.currentTarget as HTMLElement
               ).getBoundingClientRect();
               setPanelTop(Math.round(rect.top));
-              setShowTsPanel(true);
+              openTs();
               setOpen(true);
             }
           }}
           onMouseLeave={(e) => {
             if (item.href === "/timesheets") {
               // Slight delay to allow moving into the panel
-              setTimeout(() => setShowTsPanel(false), 80);
+              setTimeout(() => closeTs(), 80);
             }
           }}
         >
@@ -98,8 +104,8 @@ export function SidebarNav() {
           {/* Hover slide-out for Timesheets */}
           {item.href === "/timesheets" && (
             <div
-              onMouseEnter={() => setShowTsPanel(true)}
-              onMouseLeave={() => setShowTsPanel(false)}
+              onMouseEnter={openTs}
+              onMouseLeave={closeTs}
               className={cn(
                 "fixed z-40 w-64",
                 "transition-all duration-200",
@@ -113,8 +119,21 @@ export function SidebarNav() {
               }}
             >
               <div className="rounded-2xl border border-white/10 bg-background/90 backdrop-blur shadow-xl p-2">
-                <div className="text-xs uppercase tracking-wide text-muted-foreground px-2 py-1">
-                  Timesheets
+                <div className="flex items-center justify-between px-2 py-1">
+                  <div className="text-xs uppercase tracking-wide text-muted-foreground">
+                    Timesheets
+                  </div>
+                  <button
+                    className={cn(
+                      "text-[10px] px-2 py-0.5 rounded-md border",
+                      pinnedTs
+                        ? "bg-primary/20 text-primary border-primary/30"
+                        : "hover:bg-sidebar-accent/30 border-white/10"
+                    )}
+                    onClick={() => setPinnedTs((v) => !v)}
+                  >
+                    {pinnedTs ? "Unpin" : "Pin"}
+                  </button>
                 </div>
                 <ul className="space-y-1">
                   <li>

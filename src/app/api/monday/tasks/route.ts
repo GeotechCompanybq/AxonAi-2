@@ -260,9 +260,16 @@ export async function GET(req: NextRequest) {
     // Optionally scope to a user id for storing tasks
     const uid = req.nextUrl.searchParams.get("uid") || undefined;
     const doSync = req.nextUrl.searchParams.get("sync") === "1";
-    if (!token) {
-      // Attempt DB lookup using uid passed via query
-      if (uid) {
+    if (!token && uid) {
+      // Prefer Mongo
+      try {
+        const db = await getDb();
+        const { users } = getCollectionNames();
+        const doc = await db.collection(users).findOne({ uid });
+        token = (doc as any)?.monday?.accessToken as string | undefined;
+      } catch {}
+      // Fallback to Firestore
+      if (!token) {
         try {
           const { adminDb } = await import("@/lib/firebase-admin");
           const snap = await adminDb.collection("users").doc(uid).get();

@@ -13,14 +13,27 @@ async function getHarvestAuth(
   if (!token || !accountId) {
     const uid = req.nextUrl.searchParams.get("uid") || undefined;
     if (uid) {
+      // Prefer Mongo
       try {
-        const { adminDb } = await import("@/lib/firebase-admin");
-        const snap = await adminDb.collection("users").doc(uid).get();
+        const db = await getDb();
+        const { users } = getCollectionNames();
+        const doc = await db.collection(users).findOne({ uid });
         token =
-          token || (snap.get("harvest.accessToken") as string | undefined);
+          token || ((doc as any)?.harvest?.accessToken as string | undefined);
         accountId =
-          accountId || (snap.get("harvest.accountId") as string | undefined);
+          accountId || ((doc as any)?.harvest?.accountId as string | undefined);
       } catch {}
+      // Fallback Firestore
+      if (!token || !accountId) {
+        try {
+          const { adminDb } = await import("@/lib/firebase-admin");
+          const snap = await adminDb.collection("users").doc(uid).get();
+          token =
+            token || (snap.get("harvest.accessToken") as string | undefined);
+          accountId =
+            accountId || (snap.get("harvest.accountId") as string | undefined);
+        } catch {}
+      }
     }
   }
   if (!token) return { error: "Not connected", status: 400 } as const;

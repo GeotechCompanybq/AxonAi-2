@@ -43,8 +43,19 @@ export async function POST(req: NextRequest) {
     const body = await req.json().catch(() => ({} as any));
     const targetUid = body?.uid as string | undefined;
     if (targetUid) {
-      const userSnap = await adminDb.collection("users").doc(targetUid).get();
-      const token = userSnap.get("monday.accessToken") as string | undefined;
+      let token: string | undefined;
+      // Prefer Mongo
+      try {
+        const db = await getDb();
+        const { users } = getCollectionNames();
+        const doc = await db.collection(users).findOne({ uid: targetUid });
+        token = (doc as any)?.monday?.accessToken as string | undefined;
+      } catch {}
+      // Fallback Firestore
+      if (!token) {
+        const userSnap = await adminDb.collection("users").doc(targetUid).get();
+        token = userSnap.get("monday.accessToken") as string | undefined;
+      }
       if (!token)
         return NextResponse.json({ error: "No token" }, { status: 400 });
       await fetchAndStoreForUser(targetUid, token);
@@ -52,13 +63,30 @@ export async function POST(req: NextRequest) {
     }
 
     // Option B: fetch for all users that have a Monday token
-    const usersSnap = await adminDb.collection("users").get();
+    // Option B: iterate tokens from Mongo users first, fallback to Firestore users
     let processed = 0;
-    for (const doc of usersSnap.docs) {
-      const token = doc.get("monday.accessToken") as string | undefined;
-      if (!token) continue;
-      await fetchAndStoreForUser(doc.id, token);
-      processed++;
+    try {
+      const db = await getDb();
+      const { users } = getCollectionNames();
+      const cursor = db
+        .collection(users)
+        .find({ "monday.accessToken": { $exists: true } });
+      for await (const doc of cursor) {
+        const uid = String((doc as any)?.uid || "");
+        const token = (doc as any)?.monday?.accessToken as string | undefined;
+        if (!uid || !token) continue;
+        await fetchAndStoreForUser(uid, token);
+        processed++;
+      }
+    } catch {}
+    if (processed === 0) {
+      const usersSnap = await adminDb.collection("users").get();
+      for (const doc of usersSnap.docs) {
+        const token = doc.get("monday.accessToken") as string | undefined;
+        if (!token) continue;
+        await fetchAndStoreForUser(doc.id, token);
+        processed++;
+      }
     }
     return NextResponse.json({ ok: true, processed });
   } catch (e) {
