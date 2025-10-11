@@ -2,6 +2,7 @@
 
 import { motion } from "framer-motion";
 import Link from "next/link";
+import Image from "next/image";
 
 export function Hero() {
   return (
@@ -47,6 +48,26 @@ export function Hero() {
           >
             Watch Demo
           </Link>
+        </motion.div>
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          whileInView={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.8, delay: 0.3, ease: "easeOut" }}
+          viewport={{ once: true }}
+          className="mt-14"
+        >
+          <div className="relative mx-auto max-w-5xl rounded-2xl border border-white/10 bg-background/40 backdrop-blur p-3 shadow-[0_20px_80px_rgba(0,0,0,0.25)]">
+            <div className="relative aspect-[16/9] w-full overflow-hidden rounded-xl ring-1 ring-white/10">
+              <Image
+                src="/dashboard.png"
+                alt="AxonAI product preview"
+                fill
+                sizes="(min-width: 1024px) 960px, 100vw"
+                className="object-cover"
+                priority
+              />
+            </div>
+          </div>
         </motion.div>
       </div>
     </section>
