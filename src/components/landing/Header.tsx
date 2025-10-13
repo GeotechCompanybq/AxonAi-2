@@ -2,8 +2,10 @@
 
 import Link from "next/link";
 import { motion } from "framer-motion";
+import { useAuth } from "@/hooks/use-auth";
 
 export function LandingHeader() {
+  const { user } = useAuth();
   return (
     <motion.header
       initial={{ opacity: 0, y: -10 }}
@@ -33,18 +35,29 @@ export function LandingHeader() {
           </Link>
         </nav>
         <div className="flex items-center gap-3">
-          <Link
-            href="/login"
-            className="text-sm text-foreground/80 hover:text-foreground"
-          >
-            Log in
-          </Link>
-          <Link
-            href="/signup"
-            className="rounded-full px-4 py-2 text-sm font-medium text-background bg-primary shadow-[0_0_24px_hsla(190,100%,50%,0.35)] hover:shadow-[0_0_34px_hsla(190,100%,50%,0.5)] transition"
-          >
-            Get Started
-          </Link>
+          {user ? (
+            <Link
+              href="/dashboard"
+              className="rounded-full px-4 py-2 text-sm font-medium text-background bg-primary shadow-[0_0_24px_hsla(190,100%,50%,0.35)] hover:shadow-[0_0_34px_hsla(190,100%,50%,0.5)] transition"
+            >
+              Dashboard
+            </Link>
+          ) : (
+            <>
+              <Link
+                href="/login"
+                className="text-sm text-foreground/80 hover:text-foreground"
+              >
+                Log in
+              </Link>
+              <Link
+                href="/signup"
+                className="rounded-full px-4 py-2 text-sm font-medium text-background bg-primary shadow-[0_0_24px_hsla(190,100%,50%,0.35)] hover:shadow-[0_0_34px_hsla(190,100%,50%,0.5)] transition"
+              >
+                Get Started
+              </Link>
+            </>
+          )}
         </div>
       </div>
     </motion.header>

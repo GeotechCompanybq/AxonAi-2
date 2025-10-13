@@ -31,6 +31,7 @@ const mainNavItems = [
   { href: "/calendar", label: "Calendar", icon: CalendarDays },
   { href: "/analytics", label: "Analytics", icon: BarChart3 },
   { href: "/timesheets", label: "Timesheets", icon: Clock4 },
+  { href: "/weekly-summary", label: "Weekly Summary", icon: BarChart3 },
 ];
 
 const secondaryNavItems = [

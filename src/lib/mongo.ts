@@ -58,5 +58,6 @@ export function getCollectionNames() {
     timesheets: "timesheets", // documents: { uid, harvestId?, spent_date, hours, ... }
     timesheetDrafts: "timesheet_drafts", // documents: { uid, id, ...draft }
     users: "users", // optional mapping of user meta if needed
+    weeklySummaries: "weekly_summaries", // documents: { uid, from, to, summary, hoursTotal, entriesCount, createdAt }
   } as const;
 }

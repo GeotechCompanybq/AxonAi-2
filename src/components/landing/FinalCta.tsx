@@ -2,8 +2,10 @@
 
 import { motion } from "framer-motion";
 import Link from "next/link";
+import { useAuth } from "@/hooks/use-auth";
 
 export function FinalCta() {
+  const { user } = useAuth();
   return (
     <section className="relative py-24 md:py-32 overflow-hidden">
       <div className="absolute inset-0 -z-10 bg-[radial-gradient(600px_400px_at_50%_0%,hsl(var(--primary)/0.25),transparent_60%)]" />
@@ -24,12 +26,21 @@ export function FinalCta() {
           viewport={{ once: true }}
           className="mt-8"
         >
-          <Link
-            href="/signup"
-            className="inline-flex items-center justify-center rounded-full px-8 py-3 text-sm md:text-base font-medium text-background bg-primary shadow-[0_0_32px_hsla(190,100%,50%,0.35)] hover:shadow-[0_0_42px_hsla(190,100%,50%,0.5)] transition"
-          >
-            Get Started
-          </Link>
+          {user ? (
+            <Link
+              href="/dashboard"
+              className="inline-flex items-center justify-center rounded-full px-8 py-3 text-sm md:text-base font-medium text-background bg-primary shadow-[0_0_32px_hsla(190,100%,50%,0.35)] hover:shadow-[0_0_42px_hsla(190,100%,50%,0.5)] transition"
+            >
+              Go to Dashboard
+            </Link>
+          ) : (
+            <Link
+              href="/signup"
+              className="inline-flex items-center justify-center rounded-full px-8 py-3 text-sm md:text-base font-medium text-background bg-primary shadow-[0_0_32px_hsla(190,100%,50%,0.35)] hover:shadow-[0_0_42px_hsla(190,100%,50%,0.5)] transition"
+            >
+              Get Started
+            </Link>
+          )}
         </motion.div>
       </div>
     </section>
