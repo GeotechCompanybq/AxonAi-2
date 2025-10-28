@@ -9,3 +9,5 @@ export function isA11yHighContrastDefault(): boolean {
   return (process.env.NEXT_PUBLIC_HIGH_CONTRAST_DEFAULT || "future").trim() === "1";
 }
 
+
+
