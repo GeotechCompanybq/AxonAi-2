@@ -4,11 +4,9 @@ import { motion } from "framer-motion";
 import Link from "next/link";
 import Image from "next/image";
 import { useAuth } from "@/hooks/use-auth";
-import { getHeroVariant } from "@/lib/flags";
 
 export function Hero() {
   const { user } = useAuth();
-  const heroVariant = getHeroVariant();
   return (
     <section className="relative min-h-[88vh] overflow-hidden">
       <div className="pointer-events-none absolute inset-0 -z-10 bg-[radial-gradient(1000px_600px_at_70%_-10%,hsl(var(--primary)/0.18),transparent_60%),radial-gradient(800px_400px_at_10%_20%,hsl(var(--ring)/0.12),transparent_60%)]" />
@@ -73,25 +71,14 @@ export function Hero() {
         >
           <div className="relative mx-auto max-w-5xl rounded-2xl border border-white/10 bg-background/40 backdrop-blur p-3 shadow-[0_20px_80px_rgba(0,0,0,0.25)]">
             <div className="relative aspect-[16/9] w-full overflow-hidden rounded-xl ring-1 ring-white/10">
-              {heroVariant === "future" ? (
-                <Image
-                  src="https://images.unsplash.com/photo-1518779578993-ec3579fee39f?q=80&w=2400&auto=format&fit=crop"
-                  alt="Futuristic dashboard concept"
-                  fill
-                  sizes="(min-width: 1024px) 960px, 100vw"
-                  className="object-cover"
-                  priority
-                />
-              ) : (
-                <Image
-                  src="https://images.unsplash.com/photo-1522075469751-3a6694fb2f61?q=80&w=2400&auto=format&fit=crop"
-                  alt="Team collaborating on productivity workflows"
-                  fill
-                  sizes="(min-width: 1024px) 960px, 100vw"
-                  className="object-cover"
-                  priority
-                />
-              )}
+              <Image
+                src="/dashboard.png"
+                alt="AxonAI Dashboard - AI-powered productivity workspace"
+                fill
+                sizes="(min-width: 1024px) 960px, 100vw"
+                className="object-cover object-left-top"
+                priority
+              />
             </div>
           </div>
         </motion.div>

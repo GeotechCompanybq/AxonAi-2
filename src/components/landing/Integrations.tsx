@@ -1,12 +1,27 @@
 "use client";
 
 import { motion } from "framer-motion";
-import Image from "next/image";
+import { Calendar, LayoutDashboard, Clock } from "lucide-react";
 
-const logos = [
-  { src: "/axon-logo.png", alt: "AxonAI" },
-  { src: "/favicon.png", alt: "App" },
-  { src: "/dashboard.png", alt: "Dashboard" },
+const integrations = [
+  { 
+    name: "Monday.com", 
+    icon: LayoutDashboard,
+    color: "text-[#ff3d57]",
+    desc: "Project management & tasks"
+  },
+  { 
+    name: "Jira", 
+    icon: Calendar,
+    color: "text-[#0052CC]",
+    desc: "Issue tracking & agile"
+  },
+  { 
+    name: "Harvest", 
+    icon: Clock,
+    color: "text-[#F96E46]",
+    desc: "Time tracking & invoicing"
+  },
 ];
 
 export function Integrations() {
@@ -29,29 +44,26 @@ export function Integrations() {
           viewport={{ once: true }}
           className="mt-4 text-center text-muted-foreground max-w-2xl mx-auto"
         >
-          Seamlessly sync tasks and time from your favorite platforms.
+          Seamlessly sync tasks and time from Monday.com, Jira, and Harvest.
         </motion.p>
-        <div className="mt-10 grid grid-cols-2 sm:grid-cols-3 md:grid-cols-6 gap-6 items-center">
-          {logos.map((l, i) => (
-            <motion.div
-              key={l.alt}
-              initial={{ opacity: 0, y: 8 }}
-              whileInView={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.4, delay: i * 0.05 }}
-              viewport={{ once: true }}
-              className="flex items-center justify-center"
-            >
-              <div className="relative h-10 w-28 grayscale opacity-80 hover:opacity-100 hover:grayscale-0 transition">
-                <Image
-                  src={l.src}
-                  alt={l.alt}
-                  fill
-                  sizes="112px"
-                  className="object-contain"
-                />
-              </div>
-            </motion.div>
-          ))}
+        <div className="mt-10 grid grid-cols-1 sm:grid-cols-3 gap-6 max-w-4xl mx-auto">
+          {integrations.map((integration, i) => {
+            const Icon = integration.icon;
+            return (
+              <motion.div
+                key={integration.name}
+                initial={{ opacity: 0, y: 8 }}
+                whileInView={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.4, delay: i * 0.1 }}
+                viewport={{ once: true }}
+                className="flex flex-col items-center justify-center p-8 rounded-2xl border border-white/10 bg-background/40 backdrop-blur hover:border-white/20 transition-colors"
+              >
+                <Icon className={`h-12 w-12 ${integration.color}`} />
+                <div className="mt-4 text-lg font-semibold">{integration.name}</div>
+                <p className="mt-2 text-sm text-muted-foreground text-center">{integration.desc}</p>
+              </motion.div>
+            );
+          })}
         </div>
       </div>
     </section>
