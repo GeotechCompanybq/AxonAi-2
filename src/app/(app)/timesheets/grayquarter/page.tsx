@@ -39,6 +39,15 @@ export default function GrayquarterTimesheetsPage() {
   const [saving, setSaving] = useState(false);
   const [optimizing, setOptimizing] = useState(false);
   const [autoFixing, setAutoFixing] = useState(false);
+  const [settings, setSettings] = useState<{
+    autoFixEnabled: boolean;
+    autoFixOnFetch: boolean;
+    autoFixIncrementMinutes: number;
+  }>({
+    autoFixEnabled: true,
+    autoFixOnFetch: true,
+    autoFixIncrementMinutes: 15,
+  });
 
   function readFirebaseAuthUid(): string | undefined {
     try {
@@ -115,8 +124,10 @@ export default function GrayquarterTimesheetsPage() {
       const list = Array.isArray(json?.timeEntries) ? json.timeEntries : [];
       setEntries(list);
 
-      // Auto-fix non quarter-hour entries
-      void autoFixNonQuarter(list);
+      // Auto-fix after fetch if enabled
+      if (settings.autoFixEnabled && settings.autoFixOnFetch) {
+        void autoFixNonQuarter(list);
+      }
     } catch (e: any) {
       setError(e?.message || "Failed to load time entries");
     } finally {
@@ -143,6 +154,24 @@ export default function GrayquarterTimesheetsPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [range]);
 
+  // Load timesheet settings
+  useEffect(() => {
+    (async () => {
+      try {
+        const uid = readFirebaseAuthUid();
+        const url = new URL("/api/timesheets/settings", window.location.origin);
+        if (uid) url.searchParams.set("uid", String(uid));
+        const res = await fetch(url.toString(), { cache: "no-store" });
+        const json = await res.json();
+        setSettings({
+          autoFixEnabled: Boolean(json?.autoFixEnabled),
+          autoFixOnFetch: Boolean(json?.autoFixOnFetch),
+          autoFixIncrementMinutes: Number(json?.autoFixIncrementMinutes || 15),
+        });
+      } catch {}
+    })();
+  }, []);
+
   const totalHours = entries.reduce(
     (sum: number, e: any) => sum + (Number(e.hours) || 0),
     0
@@ -157,14 +186,16 @@ export default function GrayquarterTimesheetsPage() {
     return `${hours}:${mm}`;
   }
 
-  function isQuarterHour(n: number): boolean {
-    return Math.abs(n * 4 - Math.round(n * 4)) < 1e-6;
+  function isMultipleOfIncrement(n: number, minutes: number): boolean {
+    const factor = 60 / Math.max(1, minutes);
+    return Math.abs(n * factor - Math.round(n * factor)) < 1e-6;
   }
-  function snapToQuarterHour(n: number): number {
-    return Math.round(n * 4) / 4;
+  function snapToIncrement(n: number, minutes: number): number {
+    const factor = 60 / Math.max(1, minutes);
+    return Math.round(n * factor) / factor;
   }
   function formatQuarterHM(n: number): string {
-    const snapped = snapToQuarterHour(n);
+    const snapped = snapToIncrement(n, settings.autoFixIncrementMinutes || 15);
     const h = Math.floor(snapped);
     const m = Math.round((snapped - h) * 60);
     const mm = String(m).padStart(2, "0");
@@ -175,12 +206,18 @@ export default function GrayquarterTimesheetsPage() {
     try {
       const offenders = (list || []).filter((e: any) => {
         const h = Number(e?.hours);
-        return Number.isFinite(h) && !isQuarterHour(h);
+        return (
+          Number.isFinite(h) &&
+          !isMultipleOfIncrement(h, settings.autoFixIncrementMinutes || 15)
+        );
       });
       if (offenders.length === 0) return;
       setAutoFixing(true);
       for (const e of offenders) {
-        const target = snapToQuarterHour(Number(e.hours));
+        const target = snapToIncrement(
+          Number(e.hours),
+          settings.autoFixIncrementMinutes || 15
+        );
         try {
           const uid = readFirebaseAuthUid();
           const url = new URL(
@@ -264,13 +301,21 @@ export default function GrayquarterTimesheetsPage() {
       if (editHours !== "") {
         if (parsed == null)
           throw new Error(
-            "Invalid hours format. Use 1.5 or 1:30 in 15‑minute increments."
+            "Invalid hours format. Use 1.5 or 1:30 in configured increments."
           );
-        const snapped = Math.round(parsed * 4) / 4;
-        const isQuarterStep = Math.abs(parsed - snapped) < 1e-6;
-        if (!isQuarterStep)
-          throw new Error("Hours must be 0:15, 0:30, 0:45, 1:00, etc.");
-        payload.hours = snapped;
+        const snapped = snapToIncrement(
+          parsed,
+          settings.autoFixIncrementMinutes || 15
+        );
+        const ok = isMultipleOfIncrement(
+          parsed,
+          settings.autoFixIncrementMinutes || 15
+        );
+        if (!ok)
+          throw new Error(
+            `Hours must match the ${settings.autoFixIncrementMinutes || 15}-minute increment.`
+          );
+        payload.hours = Math.round(snapped * 100) / 100;
       }
       const uid = readFirebaseAuthUid();
       const url = new URL(

@@ -49,6 +49,11 @@ export default function TimesheetsPage() {
   const [showPendingDraftsOnly, setShowPendingDraftsOnly] = useState(false);
   const [altConnected, setAltConnected] = useState(false);
   const [view, setView] = useState<"entries" | "compare">("entries");
+  const [settings, setSettings] = useState<{
+    autoFixEnabled: boolean;
+    autoFixOnFetch: boolean;
+    autoFixIncrementMinutes: number;
+  }>({ autoFixEnabled: true, autoFixOnFetch: true, autoFixIncrementMinutes: 15 });
   const TARGET_HOURS_PER_DAY = 8;
   function readFirebaseAuthUid(): string | undefined {
     try {
@@ -145,8 +150,10 @@ export default function TimesheetsPage() {
         throw new Error(json?.error || "Failed to fetch time entries");
       const list = Array.isArray(json?.timeEntries) ? json.timeEntries : [];
       setEntries(list);
-      // Auto-fix any non-quarter-hour entries in background
-      void autoFixNonQuarter(list);
+      // Auto-fix after fetch if enabled
+      if (settings.autoFixEnabled && settings.autoFixOnFetch) {
+        void autoFixNonQuarter(list);
+      }
 
       // Kick off background sync (non-blocking)
       try {
@@ -299,6 +306,7 @@ export default function TimesheetsPage() {
     (async () => {
       try {
         const uid = readFirebaseAuthUid();
+        // Load comparison connection status
         const url = new URL("/api/harvest/status", window.location.origin);
         url.searchParams.set("conn", "alt");
         if (uid) url.searchParams.set("uid", String(uid));
@@ -313,6 +321,24 @@ export default function TimesheetsPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // Load timesheet settings
+  useEffect(() => {
+    (async () => {
+      try {
+        const uid = readFirebaseAuthUid();
+        const url = new URL("/api/timesheets/settings", window.location.origin);
+        if (uid) url.searchParams.set("uid", String(uid));
+        const res = await fetch(url.toString(), { cache: "no-store" });
+        const json = await res.json();
+        setSettings({
+          autoFixEnabled: Boolean(json?.autoFixEnabled),
+          autoFixOnFetch: Boolean(json?.autoFixOnFetch),
+          autoFixIncrementMinutes: Number(json?.autoFixIncrementMinutes || 15),
+        });
+      } catch {}
+    })();
+  }, []);
+
   const filteredDrafts = useMemo(() => {
     if (!Array.isArray(drafts)) return [] as any[];
     if (!showPendingDraftsOnly) return drafts;
@@ -323,16 +349,18 @@ export default function TimesheetsPage() {
     });
   }, [drafts, showPendingDraftsOnly, hoursByDate]);
 
-  function isQuarterHour(n: number): boolean {
-    return Math.abs(n * 4 - Math.round(n * 4)) < 1e-6;
+  function isMultipleOfIncrement(n: number, minutes: number): boolean {
+    const factor = 60 / Math.max(1, minutes);
+    return Math.abs(n * factor - Math.round(n * factor)) < 1e-6;
   }
 
-  function snapToQuarterHour(n: number): number {
-    return Math.round(n * 4) / 4;
+  function snapToIncrement(n: number, minutes: number): number {
+    const factor = 60 / Math.max(1, minutes);
+    return Math.round(n * factor) / factor;
   }
 
   function formatQuarterHM(n: number): string {
-    const snapped = snapToQuarterHour(n);
+    const snapped = snapToIncrement(n, settings.autoFixIncrementMinutes || 15);
     const h = Math.floor(snapped);
     const m = Math.round((snapped - h) * 60);
     const mm = String(m).padStart(2, "0");
@@ -343,12 +371,18 @@ export default function TimesheetsPage() {
     try {
       const offenders = (list || []).filter((e: any) => {
         const h = Number(e?.hours);
-        return Number.isFinite(h) && !isQuarterHour(h);
+        return (
+          Number.isFinite(h) &&
+          !isMultipleOfIncrement(h, settings.autoFixIncrementMinutes || 15)
+        );
       });
       if (offenders.length === 0) return;
       setAutoFixing(true);
       for (const e of offenders) {
-        const target = snapToQuarterHour(Number(e.hours));
+        const target = snapToIncrement(
+          Number(e.hours),
+          settings.autoFixIncrementMinutes || 15
+        );
         try {
           const uid = readFirebaseAuthUid();
           const url = new URL(
@@ -476,12 +510,20 @@ export default function TimesheetsPage() {
           throw new Error(
             "Invalid hours format. Use 1.5 or 1:30 in 15‑minute increments."
           );
-        // Enforce 15-minute increments (0.25h)
-        const snapped = Math.round(parsed * 4) / 4;
-        const isQuarterStep = Math.abs(parsed - snapped) < 1e-6;
-        if (!isQuarterStep)
-          throw new Error("Hours must be 0:15, 0:30, 0:45, 1:00, etc.");
-        payload.hours = snapped;
+        // Enforce configured increments
+        const snapped = snapToIncrement(
+          parsed,
+          settings.autoFixIncrementMinutes || 15
+        );
+        const ok = isMultipleOfIncrement(
+          parsed,
+          settings.autoFixIncrementMinutes || 15
+        );
+        if (!ok)
+          throw new Error(
+            `Hours must match the ${settings.autoFixIncrementMinutes || 15}-minute increment.`
+          );
+        payload.hours = Math.round(snapped * 100) / 100;
       }
       const uid = readFirebaseAuthUid();
       const url = new URL(

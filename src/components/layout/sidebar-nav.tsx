@@ -165,6 +165,19 @@ export function SidebarNav() {
                   </li>
                   <li>
                     <Link
+                      href="/timesheets/settings"
+                      className={cn(
+                        "block rounded-md px-3 py-2 text-sm",
+                        pathname === "/timesheets/settings"
+                          ? "bg-primary/15 text-primary border border-primary/20"
+                          : "hover:bg-primary/10"
+                      )}
+                    >
+                      Timesheet Settings
+                    </Link>
+                  </li>
+                  <li>
+                    <Link
                       href="/timesheets/grayquarter"
                       className={cn(
                         "block rounded-md px-3 py-2 text-sm",
