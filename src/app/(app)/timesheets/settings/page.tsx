@@ -106,6 +106,33 @@ export default function TimesheetSettingsPage() {
                 setClientNames((prev) =>
                   Array.from(new Set([...(prev || []), ...clients]))
                 );
+                // Auto-categorize billable projects: add their client names to billableClientNames
+                const billableClients = Array.from(
+                  new Set(
+                    arr
+                      .filter((p: any) => Boolean(p?.is_billable) && p?.client)
+                      .map((p: any) => String(p?.client || ""))
+                      .filter(Boolean)
+                  )
+                );
+                // Also auto-add "TruePoint Solutions" if found in projects (even if not explicitly billable)
+                const truePointFound = clients.some(
+                  (c) => c.toLowerCase().includes("truepoint") || c.toLowerCase().includes("true point")
+                );
+                if (truePointFound && !billableClients.some((c) => c.toLowerCase().includes("truepoint"))) {
+                  const truePointClient = clients.find(
+                    (c) => c.toLowerCase().includes("truepoint") || c.toLowerCase().includes("true point")
+                  );
+                  if (truePointClient) billableClients.push(truePointClient);
+                }
+                if (billableClients.length > 0) {
+                  setSettings((s) => ({
+                    ...s,
+                    billableClientNames: Array.from(
+                      new Set([...s.billableClientNames, ...billableClients])
+                    ),
+                  }));
+                }
               }
             } catch {}
           })(),
@@ -129,6 +156,33 @@ export default function TimesheetSettingsPage() {
                 setClientNames((prev) =>
                   Array.from(new Set([...(prev || []), ...clients]))
                 );
+                // Auto-categorize billable projects: add their client names to billableClientNames
+                const billableClients = Array.from(
+                  new Set(
+                    arr
+                      .filter((p: any) => Boolean(p?.is_billable) && p?.client)
+                      .map((p: any) => String(p?.client || ""))
+                      .filter(Boolean)
+                  )
+                );
+                // Also auto-add "TruePoint Solutions" if found in projects (even if not explicitly billable)
+                const truePointFound = clients.some(
+                  (c) => c.toLowerCase().includes("truepoint") || c.toLowerCase().includes("true point")
+                );
+                if (truePointFound && !billableClients.some((c) => c.toLowerCase().includes("truepoint"))) {
+                  const truePointClient = clients.find(
+                    (c) => c.toLowerCase().includes("truepoint") || c.toLowerCase().includes("true point")
+                  );
+                  if (truePointClient) billableClients.push(truePointClient);
+                }
+                if (billableClients.length > 0) {
+                  setSettings((s) => ({
+                    ...s,
+                    billableClientNames: Array.from(
+                      new Set([...s.billableClientNames, ...billableClients])
+                    ),
+                  }));
+                }
               }
             } catch {}
           })(),

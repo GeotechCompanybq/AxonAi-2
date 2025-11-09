@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { cookies } from "next/headers";
+import { getDb, getCollectionNames } from "@/lib/mongo";
 
 export async function GET(req: NextRequest) {
   try {
@@ -9,9 +10,9 @@ export async function GET(req: NextRequest) {
       connRaw.trim().toLowerCase() === "compare" ||
       connRaw.trim().toLowerCase() === "secondary";
     const cookieStore = await cookies();
-    const token = cookieStore.get(isAlt ? "harvest_token_alt" : "harvest_token")
+    let token = cookieStore.get(isAlt ? "harvest_token_alt" : "harvest_token")
       ?.value;
-    const accountId = cookieStore.get(
+    let accountId = cookieStore.get(
       isAlt ? "harvest_account_id_alt" : "harvest_account_id"
     )?.value;
     let connected = Boolean(token);
@@ -20,28 +21,48 @@ export async function GET(req: NextRequest) {
     if (!token) {
       const uid = req.nextUrl.searchParams.get("uid") || undefined;
       if (uid) {
+        // Check MongoDB first (matching projects endpoint logic)
         try {
-          const { adminDb } = await import("@/lib/firebase-admin");
-          const snap = await adminDb.collection("users").doc(uid).get();
-          const dbToken = (isAlt
-            ? snap.get("harvestAlt.accessToken")
-            : snap.get("harvest.accessToken")) as string | undefined;
-          const dbAccountId = (isAlt
-            ? snap.get("harvestAlt.accountId")
-            : snap.get("harvest.accountId")) as
-            | string
-            | undefined;
-          if (dbToken) {
+          const db = await getDb();
+          const { users } = getCollectionNames();
+          const doc = await db.collection(users).findOne({ uid });
+          token =
+            token ||
+            ((isAlt
+              ? (doc as any)?.harvestAlt?.accessToken
+              : (doc as any)?.harvest?.accessToken) as string | undefined);
+          accountId =
+            accountId ||
+            ((isAlt
+              ? (doc as any)?.harvestAlt?.accountId
+              : (doc as any)?.harvest?.accountId) as string | undefined);
+          if (token) {
             connected = true;
-            source = "database";
+            source = "mongodb";
           }
-          return NextResponse.json({
-            connected,
-            source,
-            accountId: dbAccountId || null,
-          });
-        } catch (e) {
-          // fallthrough to cookie-based response with error info
+        } catch {}
+        // Fallback to Firestore if not found in MongoDB
+        if (!token) {
+          try {
+            const { adminDb } = await import("@/lib/firebase-admin");
+            const snap = await adminDb.collection("users").doc(uid).get();
+            const dbToken = (isAlt
+              ? snap.get("harvestAlt.accessToken")
+              : snap.get("harvest.accessToken")) as string | undefined;
+            const dbAccountId = (isAlt
+              ? snap.get("harvestAlt.accountId")
+              : snap.get("harvest.accountId")) as
+              | string
+              | undefined;
+            if (dbToken) {
+              token = dbToken;
+              accountId = accountId || dbAccountId;
+              connected = true;
+              source = "firestore";
+            }
+          } catch (e) {
+            // fallthrough to cookie-based response with error info
+          }
         }
       }
     }

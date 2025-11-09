@@ -106,37 +106,57 @@ async function fetchProjects(
   const base = "https://api.harvestapp.com/v2/projects";
   const url = new URL(base);
   if (isActiveOnly) url.searchParams.set("is_active", "true");
-  url.searchParams.set("per_page", "100");
+  // Use max per_page (2000) when fetching all, otherwise use 100 for single page
+  url.searchParams.set("per_page", all ? "2000" : "100");
+  
   if (!all) {
     const res = await fetch(url.toString(), {
       headers: {
         Authorization: `Bearer ${token}`,
         "Harvest-Account-Id": accountId,
         "User-Agent": process.env.HARVEST_USER_AGENT || "AxonAI (support@geotechcompany.us)",
+        Accept: "application/json",
       },
     });
     const json = await res.json();
     if (!res.ok) throw new Error(JSON.stringify(json));
     return (Array.isArray(json?.projects) ? json.projects : []) as any[];
   }
-  let page = 1;
+  
+  // Paginate using links.next (preferred) or next_page (fallback)
   const out: any[] = [];
-  while (true) {
-    url.searchParams.set("page", String(page));
-    const res = await fetch(url.toString(), {
+  let nextUrl: string | null = url.toString();
+  
+  while (nextUrl) {
+    const res = await fetch(nextUrl, {
       headers: {
         Authorization: `Bearer ${token}`,
         "Harvest-Account-Id": accountId,
         "User-Agent": process.env.HARVEST_USER_AGENT || "AxonAI (support@geotechcompany.us)",
+        Accept: "application/json",
       },
     });
     const json = await res.json();
     if (!res.ok) throw new Error(JSON.stringify(json));
+    
     out.push(...(Array.isArray(json?.projects) ? json.projects : []));
-    const next = (json as any)?.next_page;
-    if (!next) break;
-    page = Number(next);
+    
+    // Use links.next if available (preferred), otherwise fall back to next_page
+    const links = json?.links as any;
+    if (links?.next) {
+      nextUrl = links.next;
+    } else {
+      const nextPage = (json as any)?.next_page;
+      if (nextPage) {
+        const nextUrlObj = new URL(url.toString());
+        nextUrlObj.searchParams.set("page", String(nextPage));
+        nextUrl = nextUrlObj.toString();
+      } else {
+        nextUrl = null;
+      }
+    }
   }
+  
   return out;
 }
 
@@ -243,11 +263,12 @@ export async function GET(req: NextRequest) {
         throw e;
       }
     }
-    // Return simplified mapping: id, name, is_active, client
+    // Return simplified mapping: id, name, is_active, is_billable, client
     const simplified = projects.map((p: any) => ({
       id: p?.id,
       name: p?.name,
       is_active: Boolean(p?.is_active),
+      is_billable: Boolean(p?.is_billable),
       client: p?.client?.name || null,
     }));
     return NextResponse.json({ projects: simplified });
