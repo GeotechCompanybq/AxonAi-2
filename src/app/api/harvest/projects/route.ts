@@ -140,6 +140,34 @@ async function fetchProjects(
   return out;
 }
 
+async function listAccounts(token: string): Promise<string[]> {
+  const res = await fetch("https://id.getharvest.com/api/v2/accounts", {
+    headers: {
+      Authorization: `Bearer ${token}`,
+      Accept: "application/json",
+    },
+  });
+  const json = await res.json();
+  const ids = Array.isArray(json?.accounts) ? json.accounts.map((a: any) => String(a?.id)).filter(Boolean) : [];
+  return ids;
+}
+
+async function probeAccount(token: string, accountId: string): Promise<boolean> {
+  try {
+    const res = await fetch("https://api.harvestapp.com/v2/users/me", {
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "Harvest-Account-Id": accountId,
+        "User-Agent": process.env.HARVEST_USER_AGENT || "AxonAI (support@geotechcompany.us)",
+        Accept: "application/json",
+      },
+    });
+    return res.ok;
+  } catch {
+    return false;
+  }
+}
+
 export async function GET(req: NextRequest) {
   try {
     const auth = await getHarvestAuth(req);
@@ -148,7 +176,73 @@ export async function GET(req: NextRequest) {
 
     const all = req.nextUrl.searchParams.get("all") === "1";
     const activeOnly = req.nextUrl.searchParams.get("active") !== "0";
-    const projects = await fetchProjects(token, accountId, all, activeOnly);
+    let projects: any[] = [];
+    try {
+      projects = await fetchProjects(token, accountId, all, activeOnly);
+    } catch (e: any) {
+      const msg = String(e?.message || "");
+      // Handle "Not authorized" by probing all accessible accounts and persisting the working one
+      if (msg.includes("Not authorized") || msg.includes("not authorized") || msg.includes("401")) {
+        const ids = await listAccounts(token);
+        for (const id of ids) {
+          const ok = await probeAccount(token, id);
+          if (!ok) continue;
+          // Persist cookie
+          const cookieStore2 = await cookies();
+          cookieStore2.set("harvest_account_id", id, {
+            httpOnly: true,
+            sameSite: "lax",
+            secure: true,
+            path: "/",
+            maxAge: 60 * 60 * 24 * 365,
+          });
+          // If this request was for the alt connection, set alt cookie too
+          const isAlt =
+            (req.nextUrl.searchParams.get("conn") || "").trim().toLowerCase() === "alt" ||
+            (req.nextUrl.searchParams.get("conn") || "").trim().toLowerCase() === "compare" ||
+            (req.nextUrl.searchParams.get("conn") || "").trim().toLowerCase() === "secondary";
+          if (isAlt) {
+            cookieStore2.set("harvest_account_id_alt", id, {
+              httpOnly: true,
+              sameSite: "lax",
+              secure: true,
+              path: "/",
+              maxAge: 60 * 60 * 24 * 365,
+            });
+          }
+          // Persist to DB/Firestore if uid present
+          const uid = req.nextUrl.searchParams.get("uid") || undefined;
+          if (uid) {
+            try {
+              const db = await getDb();
+              const { users } = getCollectionNames();
+              const field = isAlt ? "harvestAlt.accountId" : "harvest.accountId";
+              await db.collection(users).updateOne(
+                { uid },
+                { $set: { uid, [field]: id } as any },
+                { upsert: true }
+              );
+            } catch {}
+            try {
+              const { adminDb } = await import("@/lib/firebase-admin");
+              if (isAlt) {
+                await adminDb.collection("users").doc(uid).set({ harvestAlt: { accountId: id } }, { merge: true });
+              } else {
+                await adminDb.collection("users").doc(uid).set({ harvest: { accountId: id } }, { merge: true });
+              }
+            } catch {}
+          }
+          // Retry
+          projects = await fetchProjects(token, id, all, activeOnly);
+          break;
+        }
+        if (!projects || projects.length === 0) {
+          throw new Error("Not authorized");
+        }
+      } else {
+        throw e;
+      }
+    }
     // Return simplified mapping: id, name, is_active, client
     const simplified = projects.map((p: any) => ({
       id: p?.id,

@@ -7,6 +7,7 @@ type TimesheetSettings = {
   // Matching
   requireMatchProjectNames?: string[];
   excludedAltProjectNames?: string[]; // Non-billable to ignore on Grayquarter
+  billableClientNames?: string[]; // Clients considered billable (e.g., "TruePoint Solutions")
   matchToleranceMinutes?: number; // allowed delta between primary and alt
   dailyTargetHours?: number;
   // Auto-fix
@@ -20,6 +21,7 @@ type TimesheetSettings = {
 const DEFAULTS: Omit<TimesheetSettings, "uid"> = {
   requireMatchProjectNames: [],
   excludedAltProjectNames: [],
+  billableClientNames: ["TruePoint Solutions"],
   matchToleranceMinutes: 5,
   dailyTargetHours: 8,
   autoFixEnabled: true,
@@ -71,6 +73,9 @@ export async function POST(req: NextRequest) {
       excludedAltProjectNames: Array.isArray(body.excludedAltProjectNames)
         ? body.excludedAltProjectNames.map((s) => String(s)).slice(0, 200)
         : DEFAULTS.excludedAltProjectNames,
+      billableClientNames: Array.isArray(body.billableClientNames)
+        ? body.billableClientNames.map((s) => String(s)).slice(0, 200)
+        : DEFAULTS.billableClientNames,
       matchToleranceMinutes:
         Number(body.matchToleranceMinutes ?? DEFAULTS.matchToleranceMinutes) || 0,
       dailyTargetHours:

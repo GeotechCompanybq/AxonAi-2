@@ -13,6 +13,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 type Settings = {
   requireMatchProjectNames: string[];
   excludedAltProjectNames: string[];
+  billableClientNames: string[];
   matchToleranceMinutes: number;
   dailyTargetHours: number;
   autoFixEnabled: boolean;
@@ -23,6 +24,7 @@ type Settings = {
 const DEFAULTS: Settings = {
   requireMatchProjectNames: [],
   excludedAltProjectNames: [],
+  billableClientNames: ["TruePoint Solutions"],
   matchToleranceMinutes: 5,
   dailyTargetHours: 8,
   autoFixEnabled: true,
@@ -61,6 +63,8 @@ export default function TimesheetSettingsPage() {
   const [altProjects, setAltProjects] = useState<string[]>([]);
   const [projFilter, setProjFilter] = useState("");
   const [altFilter, setAltFilter] = useState("");
+  const [clientNames, setClientNames] = useState<string[]>([]);
+  const [clientFilter, setClientFilter] = useState("");
 
   useEffect(() => {
     (async () => {
@@ -74,6 +78,7 @@ export default function TimesheetSettingsPage() {
         setSettings({
           requireMatchProjectNames: json.requireMatchProjectNames || [],
           excludedAltProjectNames: json.excludedAltProjectNames || [],
+          billableClientNames: json.billableClientNames || ["TruePoint Solutions"],
           matchToleranceMinutes: Number(json.matchToleranceMinutes || 5),
           dailyTargetHours: Number(json.dailyTargetHours || 8),
           autoFixEnabled: Boolean(json.autoFixEnabled),
@@ -90,10 +95,17 @@ export default function TimesheetSettingsPage() {
               const r = await fetch(u.toString(), { cache: "no-store" });
               const j = await r.json();
               if (r.ok) {
+                const arr = Array.isArray(j?.projects) ? j.projects : [];
                 const names = Array.from(
-                  new Set((Array.isArray(j?.projects) ? j.projects : []).map((p: any) => String(p?.name || "")))
+                  new Set(arr.map((p: any) => String(p?.name || "")))
                 ).filter(Boolean);
                 setPrimaryProjects(names);
+                const clients = Array.from(
+                  new Set(arr.map((p: any) => String(p?.client || "")).filter(Boolean))
+                );
+                setClientNames((prev) =>
+                  Array.from(new Set([...(prev || []), ...clients]))
+                );
               }
             } catch {}
           })(),
@@ -106,10 +118,17 @@ export default function TimesheetSettingsPage() {
               const r = await fetch(u.toString(), { cache: "no-store" });
               const j = await r.json();
               if (r.ok) {
+                const arr = Array.isArray(j?.projects) ? j.projects : [];
                 const names = Array.from(
-                  new Set((Array.isArray(j?.projects) ? j.projects : []).map((p: any) => String(p?.name || "")))
+                  new Set(arr.map((p: any) => String(p?.name || "")))
                 ).filter(Boolean);
                 setAltProjects(names);
+                const clients = Array.from(
+                  new Set(arr.map((p: any) => String(p?.client || "")).filter(Boolean))
+                );
+                setClientNames((prev) =>
+                  Array.from(new Set([...(prev || []), ...clients]))
+                );
               }
             } catch {}
           })(),
@@ -292,6 +311,46 @@ export default function TimesheetSettingsPage() {
               {settings.requireMatchProjectNames.length === 0 && (
                 <div className="text-xs text-muted-foreground">None</div>
               )}
+            </div>
+
+            {/* Billable clients */}
+            <div className="space-y-2 mt-4">
+              <div className="font-medium">Billable clients</div>
+              <div className="text-sm text-muted-foreground">
+                Select client names considered billable. Preselected includes "TruePoint Solutions".
+              </div>
+              <Input
+                value={clientFilter}
+                onChange={(e) => setClientFilter(e.target.value)}
+                placeholder="Filter clients"
+              />
+              <div className="max-h-56 overflow-auto space-y-1">
+                {clientNames
+                  .filter((n) => n.toLowerCase().includes(clientFilter.toLowerCase()))
+                  .map((name) => {
+                    const checked = (settings.billableClientNames || []).includes(name);
+                    return (
+                      <label key={name} className="flex items-center gap-2 text-sm">
+                        <Checkbox
+                          checked={checked}
+                          onCheckedChange={(v: any) => {
+                            const on = Boolean(v);
+                            setSettings((s) => ({
+                              ...s,
+                              billableClientNames: on
+                                ? Array.from(new Set([...(s.billableClientNames || []), name]))
+                                : (s.billableClientNames || []).filter((x) => x !== name),
+                            }));
+                          }}
+                        />
+                        <span className="truncate">{name}</span>
+                      </label>
+                    );
+                  })}
+                {clientNames.length === 0 && (
+                  <div className="text-xs text-muted-foreground">No clients found or not connected.</div>
+                )}
+              </div>
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div className="space-y-1.5">
