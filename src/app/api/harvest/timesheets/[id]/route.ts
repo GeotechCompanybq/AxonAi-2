@@ -17,8 +17,8 @@ async function getHarvestAuth(
   let accountId = cookieStore.get(
     isAlt ? "harvest_account_id_alt" : "harvest_account_id"
   )?.value;
+  const uid = req.nextUrl.searchParams.get("uid") || undefined;
   if (!token || !accountId) {
-    const uid = req.nextUrl.searchParams.get("uid") || undefined;
     if (uid) {
       try {
         const { adminDb } = await import("@/lib/firebase-admin");
@@ -66,6 +66,23 @@ async function getHarvestAuth(
           maxAge: 60 * 60 * 24 * 365,
         }
         );
+        // Persist resolved account id to Firestore for consistency
+        if (uid) {
+          try {
+            const { adminDb } = await import("@/lib/firebase-admin");
+            if (isAlt) {
+              await adminDb
+                .collection("users")
+                .doc(uid)
+                .set({ harvestAlt: { accountId } }, { merge: true });
+            } else {
+              await adminDb
+                .collection("users")
+                .doc(uid)
+                .set({ harvest: { accountId } }, { merge: true });
+            }
+          } catch {}
+        }
       }
     } catch {}
   }

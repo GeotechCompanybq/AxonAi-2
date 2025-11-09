@@ -163,6 +163,19 @@ export function SidebarNav() {
                       Timesheet Drafts
                     </Link>
                   </li>
+                  <li>
+                    <Link
+                      href="/timesheets/grayquarter"
+                      className={cn(
+                        "block rounded-md px-3 py-2 text-sm",
+                        pathname === "/timesheets/grayquarter"
+                          ? "bg-primary/15 text-primary border border-primary/20"
+                          : "hover:bg-primary/10"
+                      )}
+                    >
+                      Grayquarter Timesheets
+                    </Link>
+                  </li>
                 </ul>
               </div>
             </div>

@@ -18,8 +18,8 @@ async function getHarvestAuth(
   let accountId = cookieStore.get(
     isAlt ? "harvest_account_id_alt" : "harvest_account_id"
   )?.value;
+  const uid = req.nextUrl.searchParams.get("uid") || undefined;
   if (!token || !accountId) {
-    const uid = req.nextUrl.searchParams.get("uid") || undefined;
     if (uid) {
       // Prefer Mongo
       try {
@@ -86,6 +86,20 @@ async function getHarvestAuth(
           maxAge: 60 * 60 * 24 * 365,
         }
         );
+        // Persist resolved account id to DB for consistency
+        if (uid) {
+          try {
+            const db = await getDb();
+            const { users } = getCollectionNames();
+            const field =
+              isAlt ? "harvestAlt.accountId" : "harvest.accountId";
+            await db.collection(users).updateOne(
+              { uid },
+              { $set: { uid, [field]: accountId } as any },
+              { upsert: true }
+            );
+          } catch {}
+        }
       }
     } catch {}
   }

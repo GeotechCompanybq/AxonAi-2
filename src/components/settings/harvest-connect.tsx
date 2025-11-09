@@ -52,14 +52,9 @@ export function HarvestConnect({
     setIsLoading(true);
     setStatus(null);
     try {
-      const today = new Date();
-      const start = new Date(today);
-      start.setDate(today.getDate() - 7);
-      const from = start.toISOString().slice(0, 10);
-      const to = today.toISOString().slice(0, 10);
       const url = new URL("/api/harvest/timesheets", window.location.origin);
-      url.searchParams.set("from", from);
-      url.searchParams.set("to", to);
+      // Fetch all pages for a full import/confirmation
+      url.searchParams.set("all", "1");
       if (isAlt) url.searchParams.set("conn", "alt");
       // Ensure uid is provided even if cookies are absent by reading from auth context or localStorage fallback
       let uidParam: string | undefined = user?.uid || undefined;
@@ -89,7 +84,11 @@ export function HarvestConnect({
       const count = Array.isArray(json?.timeEntries)
         ? json.timeEntries.length
         : 0;
-      setStatus(`Fetched ${count} recent time entries from Harvest.`);
+      setStatus(
+        `Fetched ${count} time entries from Harvest${
+          isAlt ? " (Comparison)" : ""
+        }.`
+      );
     } catch (e: any) {
       setStatus(e?.message || "Failed to fetch Harvest time entries");
     } finally {
