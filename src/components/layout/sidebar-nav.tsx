@@ -108,18 +108,24 @@ export function SidebarNav() {
               onMouseEnter={openTs}
               onMouseLeave={closeTs}
               className={cn(
-                "fixed z-40 w-64",
+                // Protruding flyout panel
+                "fixed z-40 w-[280px] md:w-[320px]",
                 "transition-all duration-200",
                 showTsPanel
                   ? "opacity-100 translate-x-0 pointer-events-auto"
                   : "opacity-0 translate-x-2 pointer-events-none"
               )}
               style={{
-                left: "calc(var(--sidebar-width) + 8px)",
+                left: "calc(var(--sidebar-width) + 12px)",
                 top: panelTop,
               }}
             >
-              <div className="rounded-2xl border border-white/10 bg-background/90 backdrop-blur shadow-xl p-2">
+              <div className="relative rounded-2xl border border-white/10 bg-background/90 backdrop-blur-xl shadow-[0_12px_32px_rgba(0,0,0,0.45)] p-2">
+                {/* small connector arrow to give a 'protrude' look */}
+                <div
+                  aria-hidden
+                  className="absolute -left-1 top-4 h-3 w-3 rotate-45 bg-background/90 border-t border-l border-white/10"
+                />
                 <div className="flex items-center justify-between px-2 py-1">
                   <div className="text-xs uppercase tracking-wide text-muted-foreground">
                     Timesheets
