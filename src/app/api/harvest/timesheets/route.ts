@@ -7,9 +7,17 @@ async function getHarvestAuth(
 ): Promise<
   { token: string; accountId: string } | { error: string; status: number }
 > {
+  const connRaw = req.nextUrl.searchParams.get("conn") || "";
+  const isAlt =
+    connRaw.trim().toLowerCase() === "alt" ||
+    connRaw.trim().toLowerCase() === "compare" ||
+    connRaw.trim().toLowerCase() === "secondary";
   const cookieStore = await cookies();
-  let token = cookieStore.get("harvest_token")?.value;
-  let accountId = cookieStore.get("harvest_account_id")?.value;
+  let token = cookieStore.get(isAlt ? "harvest_token_alt" : "harvest_token")
+    ?.value;
+  let accountId = cookieStore.get(
+    isAlt ? "harvest_account_id_alt" : "harvest_account_id"
+  )?.value;
   if (!token || !accountId) {
     const uid = req.nextUrl.searchParams.get("uid") || undefined;
     if (uid) {
@@ -19,9 +27,15 @@ async function getHarvestAuth(
         const { users } = getCollectionNames();
         const doc = await db.collection(users).findOne({ uid });
         token =
-          token || ((doc as any)?.harvest?.accessToken as string | undefined);
+          token ||
+          ((isAlt
+            ? (doc as any)?.harvestAlt?.accessToken
+            : (doc as any)?.harvest?.accessToken) as string | undefined);
         accountId =
-          accountId || ((doc as any)?.harvest?.accountId as string | undefined);
+          accountId ||
+          ((isAlt
+            ? (doc as any)?.harvestAlt?.accountId
+            : (doc as any)?.harvest?.accountId) as string | undefined);
       } catch {}
       // Fallback Firestore
       if (!token || !accountId) {
@@ -29,9 +43,15 @@ async function getHarvestAuth(
           const { adminDb } = await import("@/lib/firebase-admin");
           const snap = await adminDb.collection("users").doc(uid).get();
           token =
-            token || (snap.get("harvest.accessToken") as string | undefined);
+            token ||
+            ((isAlt
+              ? snap.get("harvestAlt.accessToken")
+              : snap.get("harvest.accessToken")) as string | undefined);
           accountId =
-            accountId || (snap.get("harvest.accountId") as string | undefined);
+            accountId ||
+            ((isAlt
+              ? snap.get("harvestAlt.accountId")
+              : snap.get("harvest.accountId")) as string | undefined);
         } catch {}
       }
     }
@@ -55,13 +75,17 @@ async function getHarvestAuth(
       if (first?.id) {
         accountId = String(first.id);
         const cookieStore2 = await cookies();
-        cookieStore2.set("harvest_account_id", accountId, {
+        cookieStore2.set(
+          isAlt ? "harvest_account_id_alt" : "harvest_account_id",
+          accountId,
+          {
           httpOnly: true,
           sameSite: "lax",
           secure: true,
           path: "/",
           maxAge: 60 * 60 * 24 * 365,
-        });
+        }
+        );
       }
     } catch {}
   }

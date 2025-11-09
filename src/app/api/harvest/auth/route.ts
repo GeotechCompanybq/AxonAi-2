@@ -9,6 +9,8 @@ export async function GET(req: NextRequest) {
   const redirectUri = process.env.HARVEST_REDIRECT_URI || computedRedirectUri;
   const uid = req.nextUrl.searchParams.get("uid") || undefined;
   const returnTo = req.nextUrl.searchParams.get("returnTo") || undefined;
+  // Optional connection slot, e.g. "alt" for comparison org
+  const conn = req.nextUrl.searchParams.get("conn") || undefined;
 
   if (!clientId) {
     return NextResponse.json(
@@ -27,6 +29,7 @@ export async function GET(req: NextRequest) {
   const stateParts = [
     uid ? `uid:${uid}` : null,
     returnTo ? `ret:${returnTo}` : null,
+    conn ? `conn:${conn}` : null,
   ].filter(Boolean) as string[];
   const state = stateParts.length > 0 ? stateParts.join("|") : "harvest_oauth";
   authUrl.searchParams.set("state", state);

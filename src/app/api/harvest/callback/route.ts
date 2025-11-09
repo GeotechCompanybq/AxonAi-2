@@ -15,6 +15,11 @@ export async function GET(req: NextRequest) {
       ?.split("|")
       ?.find((s) => s.startsWith("ret:"))
       ?.slice(4);
+    const connRaw = state
+      ?.split("|")
+      ?.find((s) => s.startsWith("conn:"))
+      ?.slice(5);
+    const conn = (connRaw || "").trim().toLowerCase() || "primary";
 
     if (!code) {
       return NextResponse.json(
@@ -56,7 +61,15 @@ export async function GET(req: NextRequest) {
 
     // Persist token and required headers in httpOnly cookies
     const cookieStore = await cookies();
-    cookieStore.set("harvest_token", tokenJson.access_token, {
+    const tokenCookieKey =
+      conn === "alt" || conn === "compare" || conn === "secondary"
+        ? "harvest_token_alt"
+        : "harvest_token";
+    const accountCookieKey =
+      conn === "alt" || conn === "compare" || conn === "secondary"
+        ? "harvest_account_id_alt"
+        : "harvest_account_id";
+    cookieStore.set(tokenCookieKey, tokenJson.access_token, {
       httpOnly: true,
       sameSite: "lax",
       secure: true,
@@ -81,7 +94,7 @@ export async function GET(req: NextRequest) {
         : undefined;
       if (first?.id) {
         accountId = String(first.id);
-        cookieStore.set("harvest_account_id", accountId, {
+        cookieStore.set(accountCookieKey, accountId, {
           httpOnly: true,
           sameSite: "lax",
           secure: true,
@@ -98,16 +111,30 @@ export async function GET(req: NextRequest) {
       try {
         const db = await getDb();
         const { users } = getCollectionNames();
-        await db.collection(users).updateOne(
-          { uid },
-          {
-            $set: {
+        const isAlt =
+          conn === "alt" || conn === "compare" || conn === "secondary";
+        const docSet = isAlt
+          ? {
+              uid,
+              "harvestAlt.accessToken": tokenJson.access_token,
+              "harvestAlt.refreshToken": tokenJson.refresh_token,
+              "harvestAlt.accountId": accountId || null,
+              "harvestAlt.tokenType": tokenJson.token_type || "Bearer",
+              "harvestAlt.updatedAt": Date.now(),
+            }
+          : {
               uid,
               "harvest.accessToken": tokenJson.access_token,
               "harvest.refreshToken": tokenJson.refresh_token,
               "harvest.accountId": accountId || null,
               "harvest.tokenType": tokenJson.token_type || "Bearer",
               "harvest.updatedAt": Date.now(),
+            };
+        await db.collection(users).updateOne(
+          { uid },
+          {
+            $set: {
+              ...docSet,
             },
           },
           { upsert: true }

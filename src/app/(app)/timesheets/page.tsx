@@ -33,8 +33,11 @@ import { Checkbox } from "@/components/ui/checkbox";
 
 export default function TimesheetsPage() {
   const [entries, setEntries] = useState<any[]>([]);
+  const [altEntries, setAltEntries] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(false);
+  const [isLoadingAlt, setIsLoadingAlt] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [altError, setAltError] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<string | number | null>(null);
   const [editingId, setEditingId] = useState<string | number | null>(null);
   const [editNotes, setEditNotes] = useState<string>("");
@@ -44,6 +47,8 @@ export default function TimesheetsPage() {
   const [autoFixing, setAutoFixing] = useState(false);
   const [drafts, setDrafts] = useState<any[] | null>(null);
   const [showPendingDraftsOnly, setShowPendingDraftsOnly] = useState(false);
+  const [altConnected, setAltConnected] = useState(false);
+  const [compareEnabled, setCompareEnabled] = useState(false);
   const TARGET_HOURS_PER_DAY = 8;
   function readFirebaseAuthUid(): string | undefined {
     try {
@@ -156,26 +161,70 @@ export default function TimesheetsPage() {
     }
   };
 
+  const fetchAltEntries = async (silent: boolean = false) => {
+    if (!compareEnabled || !altConnected) {
+      setAltEntries([]);
+      setAltError(null);
+      return;
+    }
+    if (!silent) setIsLoadingAlt(true);
+    setAltError(null);
+    try {
+      const url = new URL("/api/harvest/timesheets", window.location.origin);
+      const uid = readFirebaseAuthUid();
+      const r = computeRange();
+      if ("all" in r && r.all) {
+        url.searchParams.set("all", "1");
+      } else {
+        if ("from" in r && r.from) url.searchParams.set("from", r.from);
+        if ("to" in r && r.to) url.searchParams.set("to", r.to);
+      }
+      url.searchParams.set("per_page", "100");
+      url.searchParams.set("conn", "alt");
+      if (uid) url.searchParams.set("uid", String(uid));
+      const res = await fetch(url.toString(), { cache: "no-store" });
+      const json = await res.json();
+      if (!res.ok)
+        throw new Error(json?.error || "Failed to fetch comparison entries");
+      const list = Array.isArray(json?.timeEntries) ? json.timeEntries : [];
+      setAltEntries(list);
+    } catch (e: any) {
+      setAltError(e?.message || "Failed to load comparison entries");
+    } finally {
+      if (!silent) setIsLoadingAlt(false);
+    }
+  };
+
   useEffect(() => {
     fetchEntries(false);
+    void fetchAltEntries(true);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [range]);
 
   // background auto-refresh every 60s and when tab becomes visible
   useEffect(() => {
     const handleVisibility = () => {
-      if (!document.hidden) void fetchEntries(true);
+      if (!document.hidden) {
+        void fetchEntries(true);
+        void fetchAltEntries(true);
+      }
     };
     document.addEventListener("visibilitychange", handleVisibility);
     const id = window.setInterval(() => void fetchEntries(true), 60_000);
+    const idAlt = window.setInterval(() => void fetchAltEntries(true), 60_000);
     return () => {
       document.removeEventListener("visibilitychange", handleVisibility);
       window.clearInterval(id);
+      window.clearInterval(idAlt);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [range]);
 
   const totalHours = entries.reduce(
+    (sum: number, e: any) => sum + (Number(e.hours) || 0),
+    0
+  );
+  const totalHoursAlt = altEntries.reduce(
     (sum: number, e: any) => sum + (Number(e.hours) || 0),
     0
   );
@@ -236,6 +285,38 @@ export default function TimesheetsPage() {
     }
     return map;
   }, [entries]);
+
+  const altHoursByDate = useMemo(() => {
+    const map: Record<string, number> = {};
+    for (const e of altEntries) {
+      const d = String(e?.spent_date || "");
+      if (!d) continue;
+      const h = Number(e?.hours) || 0;
+      map[d] = (map[d] || 0) + h;
+    }
+    return map;
+  }, [altEntries]);
+
+  // Detect alternate connection on mount
+  useEffect(() => {
+    (async () => {
+      try {
+        const uid = readFirebaseAuthUid();
+        const url = new URL("/api/harvest/status", window.location.origin);
+        url.searchParams.set("conn", "alt");
+        if (uid) url.searchParams.set("uid", String(uid));
+        const res = await fetch(url.toString(), { cache: "no-store" });
+        const json = await res.json();
+        const connected = Boolean(json?.connected);
+        setAltConnected(connected);
+        setCompareEnabled(connected);
+      } catch {
+        setAltConnected(false);
+        setCompareEnabled(false);
+      }
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const filteredDrafts = useMemo(() => {
     if (!Array.isArray(drafts)) return [] as any[];
@@ -515,11 +596,111 @@ export default function TimesheetsPage() {
             )}
             <div className="flex flex-col sm:flex-row sm:items-center gap-3 sm:gap-4">
               <div className="text-sm text-muted-foreground">
-                {entries.length} entries · {totalHours.toFixed(2)} hours
+              {entries.length} entries · {totalHours.toFixed(2)} hours
+              {compareEnabled && (
+                <>
+                  {" "}
+                  · Compare: {altEntries.length} entries ·{" "}
+                  {totalHoursAlt.toFixed(2)} hours
+                </>
+              )}
                 {autoFixing && <span className="ml-2">(Auto-fixing…)</span>}
               </div>
             </div>
           </div>
+        {/* Comparison controls */}
+        <div className="flex flex-col gap-2">
+          {!altConnected ? (
+            <div className="border rounded-md p-3 flex items-center justify-between gap-3 bg-muted/30">
+              <div className="text-sm">
+                Connect a second Harvest organization to compare time entries.
+              </div>
+              <Button
+                onClick={() => {
+                  const uid = readFirebaseAuthUid();
+                  const url = new URL("/api/harvest/auth", window.location.origin);
+                  url.searchParams.set("conn", "alt");
+                  if (uid) url.searchParams.set("uid", String(uid));
+                  url.searchParams.set("returnTo", "/timesheets");
+                  window.location.href = url.toString();
+                }}
+              >
+                Connect Comparison
+              </Button>
+            </div>
+          ) : (
+            <label className="flex items-center gap-2 text-sm">
+              <Checkbox
+                checked={compareEnabled}
+                onCheckedChange={(v: any) => {
+                  const next = Boolean(v);
+                  setCompareEnabled(next);
+                  if (next) void fetchAltEntries(false);
+                }}
+              />
+              <span>Compare with alternate Harvest organization</span>
+            </label>
+          )}
+          {compareEnabled && altError && (
+            <div className="text-sm text-red-600">{altError}</div>
+          )}
+          {compareEnabled && (
+            <div className="overflow-auto border rounded-md">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="bg-muted/40">
+                    <th className="text-left p-2">Date</th>
+                    <th className="text-right p-2">Primary Hours</th>
+                    <th className="text-right p-2">Comparison Hours</th>
+                    <th className="text-right p-2">Delta</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {(() => {
+                    const dates = Array.from(
+                      new Set([
+                        ...Object.keys(hoursByDate),
+                        ...Object.keys(altHoursByDate),
+                      ])
+                    ).sort();
+                    if (dates.length === 0) {
+                      return (
+                        <tr>
+                          <td className="p-2 text-muted-foreground" colSpan={4}>
+                            No overlapping dates to compare in this range.
+                          </td>
+                        </tr>
+                      );
+                    }
+                    return dates.map((d) => {
+                      const a = hoursByDate[d] || 0;
+                      const b = altHoursByDate[d] || 0;
+                      const delta = a - b;
+                      return (
+                        <tr key={d} className="border-t">
+                          <td className="p-2">{d}</td>
+                          <td className="p-2 text-right">{a.toFixed(2)}</td>
+                          <td className="p-2 text-right">{b.toFixed(2)}</td>
+                          <td
+                            className={`p-2 text-right ${
+                              Math.abs(delta) > 1e-6
+                                ? delta > 0
+                                  ? "text-emerald-600"
+                                  : "text-red-600"
+                                : ""
+                            }`}
+                          >
+                            {delta === 0 ? "0.00" : delta.toFixed(2)}
+                          </td>
+                        </tr>
+                      );
+                    });
+                  })()}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
           {error && <div className="text-sm text-red-600">{error}</div>}
           {/* Drafts panel */}
           {Array.isArray(drafts) && drafts.length > 0 && (
