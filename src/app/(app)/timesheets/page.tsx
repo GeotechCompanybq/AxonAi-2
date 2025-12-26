@@ -21,8 +21,6 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
-import { db } from "@/lib/firebase";
-import { collection, onSnapshot, query, orderBy } from "firebase/firestore";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -109,23 +107,35 @@ export default function TimesheetsPage() {
     return { all: true } as const;
   };
 
-  // Live subscribe to user's local draft timesheets if uid is present on window
+  const fetchDrafts = async () => {
+    try {
+      const uid = readFirebaseAuthUid();
+      if (!uid) {
+        setDrafts([]);
+        return;
+      }
+      const url = new URL("/api/timesheets/drafts", window.location.origin);
+      url.searchParams.set("uid", uid);
+      const r = computeRange();
+      if (!("all" in r && r.all)) {
+        if ("from" in r && r.from) url.searchParams.set("from", r.from);
+        if ("to" in r && r.to) url.searchParams.set("to", r.to);
+      }
+      const res = await fetch(url.toString(), { cache: "no-store" });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json?.error || "Failed to load drafts");
+      setDrafts(Array.isArray(json?.drafts) ? json.drafts : []);
+    } catch {
+      // Non-fatal: drafts panel is optional
+      setDrafts([]);
+    }
+  };
+
+  // Load drafts from Mongo; refresh when range changes.
   useEffect(() => {
-    const uid = readFirebaseAuthUid();
-    if (!uid) return;
-    const col = collection(db as any, "users", uid, "timesheetDrafts");
-    const q = query(col, orderBy("spent_date", "asc"));
-    const unsub = onSnapshot(
-      q,
-      (snap) => {
-        const arr: any[] = [];
-        snap.forEach((d) => arr.push({ id: d.id, ...d.data() }));
-        setDrafts(arr);
-      },
-      () => setDrafts([])
-    );
-    return () => unsub();
-  }, []);
+    void fetchDrafts();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [range, from, to]);
 
   const fetchEntries = async (silent: boolean = false) => {
     if (!silent) setIsLoading(true);
@@ -154,6 +164,9 @@ export default function TimesheetsPage() {
       if (settings.autoFixEnabled && settings.autoFixOnFetch) {
         void autoFixNonQuarter(list);
       }
+
+      // Refresh drafts after fetching entries so "pending hours" filtering is current
+      void fetchDrafts();
 
       // Kick off background sync (non-blocking)
       try {
@@ -263,8 +276,8 @@ export default function TimesheetsPage() {
             internalProjectName: "Internal, Administrative",
           }),
         });
-        // Silent failure acceptable; drafts will stream into Firestore listener
-        void res;
+        // Silent failure acceptable; if it succeeds, refresh drafts from Mongo
+        if (res.ok) void fetchDrafts();
       } catch {}
     })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -371,6 +384,7 @@ export default function TimesheetsPage() {
     try {
       const offenders = (list || []).filter((e: any) => {
         const h = Number(e?.hours);
+        if (e?.is_locked) return false;
         return (
           Number.isFinite(h) &&
           !isMultipleOfIncrement(h, settings.autoFixIncrementMinutes || 15)
@@ -792,8 +806,13 @@ export default function TimesheetsPage() {
                             size="sm"
                             onClick={async () => {
                               try {
+                                const uid = readFirebaseAuthUid();
                                 const res = await fetch(
-                                  "/api/harvest/timesheets",
+                                  uid
+                                    ? `/api/harvest/timesheets?uid=${encodeURIComponent(
+                                        uid
+                                      )}`
+                                    : "/api/harvest/timesheets",
                                   {
                                     method: "POST",
                                     headers: {
@@ -807,6 +826,19 @@ export default function TimesheetsPage() {
                                   }
                                 );
                                 if (!res.ok) throw new Error("Create failed");
+                                if (uid) {
+                                  const delUrl = new URL(
+                                    `/api/timesheets/drafts/${encodeURIComponent(
+                                      String(d.id)
+                                    )}`,
+                                    window.location.origin
+                                  );
+                                  delUrl.searchParams.set("uid", uid);
+                                  await fetch(delUrl.toString(), {
+                                    method: "DELETE",
+                                  });
+                                }
+                                void fetchDrafts();
                               } catch (e: any) {
                                 setError(
                                   e?.message || "Failed to create timesheet"

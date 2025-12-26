@@ -111,28 +111,43 @@ async function getHarvestAuth(
 async function fetchHarvestTimeEntriesPage(
   token: string,
   accountId: string,
-  params: URLSearchParams
+  params: URLSearchParams,
+  timeoutMs: number = 8000
 ) {
   const baseUrl = "https://api.harvestapp.com/v2/time_entries";
   const url = new URL(baseUrl);
   // Copy params
   for (const [k, v] of params.entries()) url.searchParams.set(k, v);
-  const res = await fetch(url.toString(), {
-    headers: {
-      Authorization: `Bearer ${token}`,
-      "Harvest-Account-Id": accountId,
-      "User-Agent":
-        process.env.HARVEST_USER_AGENT || "AxonAI (support@geotechcompany.us)",
-    },
-  });
-  const json = await res.json();
-  if (!res.ok) throw new Error(JSON.stringify(json));
-  return json as {
-    time_entries: any[];
-    total_pages?: number;
-    next_page?: number;
-    page?: number;
-  };
+  
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+  
+  try {
+    const res = await fetch(url.toString(), {
+      signal: controller.signal,
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "Harvest-Account-Id": accountId,
+        "User-Agent":
+          process.env.HARVEST_USER_AGENT || "AxonAI (support@geotechcompany.us)",
+      },
+    });
+    clearTimeout(timeoutId);
+    const json = await res.json();
+    if (!res.ok) throw new Error(JSON.stringify(json));
+    return json as {
+      time_entries: any[];
+      total_pages?: number;
+      next_page?: number;
+      page?: number;
+    };
+  } catch (e: any) {
+    clearTimeout(timeoutId);
+    if (e.name === 'AbortError' || e.code === 'UND_ERR_CONNECT_TIMEOUT') {
+      throw new Error('Connection timeout - Harvest API is not responding. Please try again later.');
+    }
+    throw e;
+  }
 }
 
 export async function GET(req: NextRequest) {
@@ -154,7 +169,7 @@ export async function GET(req: NextRequest) {
     const uid = req.nextUrl.searchParams.get("uid") || undefined;
     const doSync = req.nextUrl.searchParams.get("sync") === "1";
     if (!fetchAll) {
-      const data = await fetchHarvestTimeEntriesPage(token, accountId, params);
+      const data = await fetchHarvestTimeEntriesPage(token, accountId, params, 8000);
       const list = data?.time_entries || [];
       if (uid && doSync) {
         try {
@@ -194,7 +209,7 @@ export async function GET(req: NextRequest) {
     let allEntries: any[] = [];
     while (true) {
       params.set("page", String(page));
-      const data = await fetchHarvestTimeEntriesPage(token, accountId, params);
+      const data = await fetchHarvestTimeEntriesPage(token, accountId, params, 8000);
       const items = Array.isArray(data?.time_entries) ? data.time_entries : [];
       allEntries = allEntries.concat(items);
       const nextPage = (data as any)?.next_page;

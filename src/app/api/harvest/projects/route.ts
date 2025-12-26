@@ -106,8 +106,8 @@ async function fetchProjects(
   const base = "https://api.harvestapp.com/v2/projects";
   const url = new URL(base);
   if (isActiveOnly) url.searchParams.set("is_active", "true");
-  // Use max per_page (2000) when fetching all, otherwise use 100 for single page
-  url.searchParams.set("per_page", all ? "2000" : "100");
+  // Harvest API typically limits to 100 per page, so use 100 for consistency
+  url.searchParams.set("per_page", "100");
   
   if (!all) {
     const res = await fetch(url.toString(), {
@@ -123,11 +123,16 @@ async function fetchProjects(
     return (Array.isArray(json?.projects) ? json.projects : []) as any[];
   }
   
-  // Paginate using links.next (preferred) or next_page (fallback)
+  // Paginate through all pages - Harvest API uses cursor-based pagination (links.next) or page-based
   const out: any[] = [];
   let nextUrl: string | null = url.toString();
+  let pageCount = 0;
+  const perPage = 100;
+  const maxPages = 1000; // Safety limit
   
-  while (nextUrl) {
+  while (nextUrl && pageCount < maxPages) {
+    pageCount++;
+    
     const res = await fetch(nextUrl, {
       headers: {
         Authorization: `Bearer ${token}`,
@@ -139,22 +144,51 @@ async function fetchProjects(
     const json = await res.json();
     if (!res.ok) throw new Error(JSON.stringify(json));
     
-    out.push(...(Array.isArray(json?.projects) ? json.projects : []));
+    const projects = Array.isArray(json?.projects) ? json.projects : [];
+    out.push(...projects);
     
-    // Use links.next if available (preferred), otherwise fall back to next_page
+    // Check for next page: prefer links.next (cursor-based), then next_page (page-based)
     const links = json?.links as any;
+    const nextPageNum = (json as any)?.next_page as number | undefined;
+    const totalPages = (json as any)?.total_pages as number | undefined;
+    
     if (links?.next) {
+      // Use cursor-based pagination (preferred)
       nextUrl = links.next;
+    } else if (nextPageNum) {
+      // Use page-based pagination
+      const pageUrl = new URL(url.toString());
+      pageUrl.searchParams.set("page", String(nextPageNum));
+      nextUrl = pageUrl.toString();
+    } else if (totalPages) {
+      // Extract current page from URL and increment
+      const currentUrl = new URL(nextUrl);
+      const currentPage = parseInt(currentUrl.searchParams.get("page") || "1", 10);
+      if (currentPage < totalPages) {
+        const pageUrl = new URL(url.toString());
+        pageUrl.searchParams.set("page", String(currentPage + 1));
+        nextUrl = pageUrl.toString();
+      } else {
+        nextUrl = null;
+      }
     } else {
-      const nextPage = (json as any)?.next_page;
-      if (nextPage) {
-        const nextUrlObj = new URL(url.toString());
-        nextUrlObj.searchParams.set("page", String(nextPage));
-        nextUrl = nextUrlObj.toString();
+      // Fallback: if we got a full page (100 items), there might be more
+      // If we got fewer than 100, we're definitely on the last page
+      if (projects.length === perPage) {
+        // Try to increment page number
+        const currentUrl = new URL(nextUrl);
+        const currentPage = parseInt(currentUrl.searchParams.get("page") || "1", 10);
+        const pageUrl = new URL(url.toString());
+        pageUrl.searchParams.set("page", String(currentPage + 1));
+        nextUrl = pageUrl.toString();
       } else {
         nextUrl = null;
       }
     }
+  }
+  
+  if (pageCount >= maxPages) {
+    console.warn("Harvest projects pagination reached safety limit");
   }
   
   return out;
@@ -188,6 +222,34 @@ async function probeAccount(token: string, accountId: string): Promise<boolean> 
   }
 }
 
+function isHarvestAuthErrorMessage(message: string): boolean {
+  const msg = String(message || "");
+  const lower = msg.toLowerCase();
+  // Common Harvest shapes are JSON: { code: "not_authorized", message: "...", ... }
+  try {
+    const parsed = JSON.parse(msg);
+    const code = String((parsed as any)?.code || (parsed as any)?.error || "");
+    const status = Number((parsed as any)?.status || (parsed as any)?.http_status);
+    const parsedLower = JSON.stringify(parsed).toLowerCase();
+    return (
+      status === 401 ||
+      status === 403 ||
+      code.toLowerCase() === "not_authorized" ||
+      parsedLower.includes("not authorized") ||
+      parsedLower.includes("not_authorized") ||
+      parsedLower.includes("\"status\":401") ||
+      parsedLower.includes("\"status\":403")
+    );
+  } catch {
+    return (
+      lower.includes("not authorized") ||
+      lower.includes("not_authorized") ||
+      lower.includes("401") ||
+      lower.includes("403")
+    );
+  }
+}
+
 export async function GET(req: NextRequest) {
   try {
     const auth = await getHarvestAuth(req);
@@ -202,7 +264,7 @@ export async function GET(req: NextRequest) {
     } catch (e: any) {
       const msg = String(e?.message || "");
       // Handle "Not authorized" by probing all accessible accounts and persisting the working one
-      if (msg.includes("Not authorized") || msg.includes("not authorized") || msg.includes("401")) {
+      if (isHarvestAuthErrorMessage(msg)) {
         const ids = await listAccounts(token);
         for (const id of ids) {
           const ok = await probeAccount(token, id);

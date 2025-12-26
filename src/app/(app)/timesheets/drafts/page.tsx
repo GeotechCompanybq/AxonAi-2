@@ -5,15 +5,6 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Checkbox } from "@/components/ui/checkbox";
-import { db } from "@/lib/firebase";
-import {
-  collection,
-  onSnapshot,
-  orderBy,
-  query,
-  doc,
-  deleteDoc,
-} from "firebase/firestore";
 
 export default function TimesheetDraftsPage() {
   const [drafts, setDrafts] = useState<any[]>([]);
@@ -44,23 +35,26 @@ export default function TimesheetDraftsPage() {
 
   useEffect(() => {
     const uid = readFirebaseAuthUid();
-    if (!uid) return;
-    const col = collection(db as any, "users", uid, "timesheetDrafts");
-    const q = query(col, orderBy("spent_date", "asc"));
-    const unsub = onSnapshot(
-      q,
-      (snap) => {
-        const arr: any[] = [];
-        snap.forEach((d) => arr.push({ id: d.id, ...d.data() }));
-        setDrafts(arr);
-        setIsLoading(false);
-      },
-      () => {
+    if (!uid) {
+      setIsLoading(false);
+      setDrafts([]);
+      return;
+    }
+    (async () => {
+      try {
+        const url = new URL("/api/timesheets/drafts", window.location.origin);
+        url.searchParams.set("uid", uid);
+        const res = await fetch(url.toString(), { cache: "no-store" });
+        const json = await res.json();
+        if (!res.ok) throw new Error(json?.error || "Failed to load drafts");
+        setDrafts(Array.isArray(json?.drafts) ? json.drafts : []);
+      } catch (e: any) {
         setDrafts([]);
+        setError(e?.message || "Failed to load drafts");
+      } finally {
         setIsLoading(false);
       }
-    );
-    return () => unsub();
+    })();
   }, []);
 
   const filtered = useMemo(() => {
@@ -74,6 +68,7 @@ export default function TimesheetDraftsPage() {
   async function approveDraft(d: any) {
     try {
       setError(null);
+      const uid = readFirebaseAuthUid();
       const res = await fetch("/api/harvest/timesheets", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -84,6 +79,15 @@ export default function TimesheetDraftsPage() {
         }),
       });
       if (!res.ok) throw new Error("Failed to create timesheet");
+      if (uid) {
+        const delUrl = new URL(
+          `/api/timesheets/drafts/${encodeURIComponent(String(d.id))}`,
+          window.location.origin
+        );
+        delUrl.searchParams.set("uid", uid);
+        await fetch(delUrl.toString(), { method: "DELETE" });
+      }
+      setDrafts((prev) => prev.filter((x) => String(x?.id) !== String(d?.id)));
     } catch (e: any) {
       setError(e?.message || "Approval failed");
     }
@@ -94,8 +98,17 @@ export default function TimesheetDraftsPage() {
       setError(null);
       const uid = readFirebaseAuthUid();
       if (!uid) throw new Error("Not authenticated");
-      const ref = doc(db as any, "users", uid, "timesheetDrafts", String(d.id));
-      await deleteDoc(ref);
+      const delUrl = new URL(
+        `/api/timesheets/drafts/${encodeURIComponent(String(d.id))}`,
+        window.location.origin
+      );
+      delUrl.searchParams.set("uid", uid);
+      const res = await fetch(delUrl.toString(), { method: "DELETE" });
+      if (!res.ok) {
+        const json = await res.json().catch(() => ({} as any));
+        throw new Error(json?.error || "Delete failed");
+      }
+      setDrafts((prev) => prev.filter((x) => String(x?.id) !== String(d?.id)));
     } catch (e: any) {
       setError(e?.message || "Delete failed");
     }

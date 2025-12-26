@@ -62,6 +62,27 @@ To get a local copy up and running, follow these simple steps.
     ```
     This will start the Next.js app (usually on `http://localhost:9002`) and the Genkit development server.
 
+## 🗓️ Microsoft / Teams Calendar (Signed-in user)
+
+This app can pull the signed-in user’s calendar via **Microsoft Graph**. A “Teams meeting” will show up as a normal calendar event with `isOnlineMeeting: true`.
+
+### Setup
+
+- **Create an Entra ID (Azure AD) App Registration**
+  - **Redirect URI**: `https://YOUR_DOMAIN/api/microsoft/callback` (or your local dev URL)
+  - **API permissions (Delegated)**: `User.Read`, `Calendars.Read`, `offline_access`
+
+- **Add env vars**
+  - Copy `.env.example` → `.env.local` and fill:
+    - `MICROSOFT_CLIENT_ID`
+    - `MICROSOFT_CLIENT_SECRET`
+    - (optional) `MICROSOFT_TENANT_ID`
+
+### Endpoints
+
+- `GET /api/microsoft/auth?uid=...&returnTo=/settings` starts OAuth
+- `GET /api/microsoft/calendar?uid=...` returns the next 7 days of events (use `start`, `end`, `tz` to customize)
+
 ## 🤝 Contributing
 
 Contributions are what make the open-source community such an amazing place to learn, inspire, and create. Any contributions you make are **greatly appreciated**.

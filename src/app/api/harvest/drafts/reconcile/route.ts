@@ -16,6 +16,34 @@ type DraftTimesheet = {
   status: "draft";
 };
 
+function parseIsoDate(dateStr: string): Date | null {
+  const s = (dateStr || "").trim();
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(s)) return null;
+  const d = new Date(`${s}T00:00:00.000Z`);
+  if (Number.isNaN(d.getTime())) return null;
+  return d;
+}
+
+function formatIsoDate(d: Date): string {
+  return d.toISOString().slice(0, 10);
+}
+
+function listDatesInclusive(from: string, to: string, maxDays = 370): string[] {
+  const start = parseIsoDate(from);
+  const end = parseIsoDate(to);
+  if (!start || !end) return [];
+  const out: string[] = [];
+  const cur = new Date(start);
+  let guard = 0;
+  while (cur.getTime() <= end.getTime()) {
+    out.push(formatIsoDate(cur));
+    cur.setUTCDate(cur.getUTCDate() + 1);
+    guard++;
+    if (guard > maxDays) break;
+  }
+  return out;
+}
+
 async function getHarvestAuth(
   req: NextRequest
 ): Promise<
@@ -157,6 +185,19 @@ export async function POST(req: NextRequest) {
         { status: 400 }
       );
     }
+    const dateList = listDatesInclusive(from, to, 370);
+    if (dateList.length === 0) {
+      return NextResponse.json(
+        { error: "Invalid date range (expected YYYY-MM-DD)" },
+        { status: 400 }
+      );
+    }
+    if (dateList.length > 370) {
+      return NextResponse.json(
+        { error: "Date range too large" },
+        { status: 400 }
+      );
+    }
 
     // Monday token via cookie/DB
     const cookieStore = await cookies();
@@ -222,46 +263,53 @@ export async function POST(req: NextRequest) {
 
     const roundQuarter = (n: number) => Math.round(n * 4) / 4;
 
-    for (const [date, tasksOnDate] of tasksByDate.entries()) {
+    for (const date of dateList) {
+      const tasksOnDate = tasksByDate.get(date) || [];
       const existing = hoursByDate.get(date) || 0;
       let missing = Math.max(0, targetPerDay - existing);
       if (missing === 0) continue; // already satisfied for that day
+      if (tasksOnDate.length > 0) {
+        // If the sum of defaultHours across tasks can fully cover the missing hours,
+        // distribute evenly; otherwise allocate greedily up to missing.
+        const maxCover =
+          tasksOnDate.length *
+          (Number.isFinite(defaultHours) && defaultHours > 0
+            ? defaultHours
+            : 1);
+        const perEven =
+          maxCover >= missing ? missing / tasksOnDate.length : undefined;
 
-      // If the sum of defaultHours across tasks can fully cover the missing hours,
-      // distribute evenly; otherwise allocate greedily up to missing.
-      const maxCover =
-        tasksOnDate.length *
-        (Number.isFinite(defaultHours) && defaultHours > 0 ? defaultHours : 1);
-      const perEven =
-        maxCover >= missing ? missing / tasksOnDate.length : undefined;
+        for (let i = 0; i < tasksOnDate.length && missing > 0.001; i++) {
+          const t = tasksOnDate[i];
+          // Determine allocation for this task
+          let alloc =
+            perEven !== undefined ? perEven : Math.min(defaultHours, missing);
+          // For last task, assign whatever remains to hit the target exactly
+          const isLast = i === tasksOnDate.length - 1;
+          if (perEven !== undefined && isLast) alloc = missing; // take remainder after rounding adjustments
+          alloc = Math.max(0, roundQuarter(alloc));
+          if (alloc < 0.25) {
+            // Skip tiny allocations after rounding
+            continue;
+          }
+          missing = Math.max(0, roundQuarter(missing - alloc));
 
-      for (let i = 0; i < tasksOnDate.length && missing > 0.001; i++) {
-        const t = tasksOnDate[i];
-        // Determine allocation for this task
-        let alloc =
-          perEven !== undefined ? perEven : Math.min(defaultHours, missing);
-        // For last task, assign whatever remains to hit the target exactly
-        const isLast = i === tasksOnDate.length - 1;
-        if (perEven !== undefined && isLast) alloc = missing; // take remainder after rounding adjustments
-        alloc = Math.max(0, roundQuarter(alloc));
-        if (alloc < 0.25) {
-          // Skip tiny allocations after rounding
-          continue;
+          const id = `${date}_${(t as any).id || t.name}`
+            .replace(/[^a-zA-Z0-9_-]/g, "")
+            .slice(0, 120);
+          drafts.push({
+            id,
+            spent_date: date,
+            hours: alloc,
+            notes: `${t.name} — ${t.description || "from Monday"}`.slice(
+              0,
+              255
+            ),
+            source: "monday",
+            createdAt: new Date().toISOString(),
+            status: "draft",
+          });
         }
-        missing = Math.max(0, roundQuarter(missing - alloc));
-
-        const id = `${date}_${(t as any).id || t.name}`
-          .replace(/[^a-zA-Z0-9_-]/g, "")
-          .slice(0, 120);
-        drafts.push({
-          id,
-          spent_date: date,
-          hours: alloc,
-          notes: `${t.name} — ${t.description || "from Monday"}`.slice(0, 255),
-          source: "monday",
-          createdAt: new Date().toISOString(),
-          status: "draft",
-        });
       }
 
       // If still missing after Monday distribution, optionally fall back to internal non-billable

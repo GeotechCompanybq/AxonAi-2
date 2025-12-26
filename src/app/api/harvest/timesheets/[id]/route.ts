@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { cookies } from "next/headers";
+import { getDb, getCollectionNames } from "@/lib/mongo";
 
 async function getHarvestAuth(
   req: NextRequest
@@ -20,20 +21,39 @@ async function getHarvestAuth(
   const uid = req.nextUrl.searchParams.get("uid") || undefined;
   if (!token || !accountId) {
     if (uid) {
+      // Prefer Mongo
       try {
-        const { adminDb } = await import("@/lib/firebase-admin");
-        const snap = await adminDb.collection("users").doc(uid).get();
+        const db = await getDb();
+        const { users } = getCollectionNames();
+        const doc = await db.collection(users).findOne({ uid });
         token =
           token ||
           ((isAlt
-            ? snap.get("harvestAlt.accessToken")
-            : snap.get("harvest.accessToken")) as string | undefined);
+            ? (doc as any)?.harvestAlt?.accessToken
+            : (doc as any)?.harvest?.accessToken) as string | undefined);
         accountId =
           accountId ||
           ((isAlt
-            ? snap.get("harvestAlt.accountId")
-            : snap.get("harvest.accountId")) as string | undefined);
+            ? (doc as any)?.harvestAlt?.accountId
+            : (doc as any)?.harvest?.accountId) as string | undefined);
       } catch {}
+      // Fallback Firestore
+      if (!token || !accountId) {
+        try {
+          const { adminDb } = await import("@/lib/firebase-admin");
+          const snap = await adminDb.collection("users").doc(uid).get();
+          token =
+            token ||
+            ((isAlt
+              ? snap.get("harvestAlt.accessToken")
+              : snap.get("harvest.accessToken")) as string | undefined);
+          accountId =
+            accountId ||
+            ((isAlt
+              ? snap.get("harvestAlt.accountId")
+              : snap.get("harvest.accountId")) as string | undefined);
+        } catch {}
+      }
     }
   }
   if (!token) return { error: "Not connected", status: 400 } as const;
@@ -66,8 +86,19 @@ async function getHarvestAuth(
           maxAge: 60 * 60 * 24 * 365,
         }
         );
-        // Persist resolved account id to Firestore for consistency
+        // Persist resolved account id to DB for consistency
         if (uid) {
+          try {
+            const db = await getDb();
+            const { users } = getCollectionNames();
+            const field = isAlt ? "harvestAlt.accountId" : "harvest.accountId";
+            await db.collection(users).updateOne(
+              { uid },
+              { $set: { uid, [field]: accountId } as any },
+              { upsert: true }
+            );
+          } catch {}
+          // Also mirror to Firestore if available (best-effort)
           try {
             const { adminDb } = await import("@/lib/firebase-admin");
             if (isAlt) {

@@ -221,11 +221,13 @@ export function FloatingChatBot() {
           return;
         }
         try {
-          const col = collection(db as any, "users", uid, "timesheetDrafts");
-          const q = query(col, orderBy("spent_date", "asc"));
-          const snap = await getDocs(q);
-          const drafts: any[] = [];
-          snap.forEach((d) => drafts.push({ id: d.id, ...d.data() }));
+          const url = new URL("/api/timesheets/drafts", window.location.origin);
+          url.searchParams.set("uid", uid);
+          const res = await fetch(url.toString(), { cache: "no-store" });
+          const json = await res.json();
+          if (!res.ok)
+            throw new Error(json?.error || "Failed to read drafted timesheets.");
+          const drafts: any[] = Array.isArray(json?.drafts) ? json.drafts : [];
           if (drafts.length === 0) {
             setMessages((m) => [
               ...m,
