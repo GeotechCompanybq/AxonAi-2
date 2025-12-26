@@ -17,6 +17,8 @@ type TimesheetSettings = {
   // Calendar → Harvest posting
   meetingHarvestProjectId?: string; // Harvest project_id used when posting meetings
   meetingHarvestTaskId?: string; // Harvest task_id used when posting meetings
+  // Notifications
+  notificationEmail?: string; // where mismatch approval alerts should be sent
   // Future expansion
   updatedAt?: string;
 };
@@ -32,6 +34,7 @@ const DEFAULTS: Omit<TimesheetSettings, "uid"> = {
   autoFixOnFetch: true,
   meetingHarvestProjectId: "",
   meetingHarvestTaskId: "",
+  notificationEmail: "",
   updatedAt: "",
 };
 
@@ -72,6 +75,7 @@ export async function POST(req: NextRequest) {
     const now = new Date().toISOString();
     const meetingHarvestProjectId = String(body.meetingHarvestProjectId || "").trim();
     const meetingHarvestTaskId = String(body.meetingHarvestTaskId || "").trim();
+    const notificationEmail = String(body.notificationEmail || "").trim();
     const settings: TimesheetSettings = {
       uid,
       requireMatchProjectNames: Array.isArray(body.requireMatchProjectNames)
@@ -97,6 +101,7 @@ export async function POST(req: NextRequest) {
       autoFixOnFetch: Boolean(body.autoFixOnFetch ?? DEFAULTS.autoFixOnFetch),
       meetingHarvestProjectId,
       meetingHarvestTaskId,
+      notificationEmail,
       updatedAt: now,
     };
     // Boundaries

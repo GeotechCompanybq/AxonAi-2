@@ -4,6 +4,7 @@ dotenv.config();
 dotenv.config({ path: ".env.local", override: true });
 import cron from "node-cron";
 import { runMondaySync } from "@/jobs/monday-sync";
+import { runTimesheetMismatchSync } from "@/jobs/timesheet-mismatch-sync";
 
 async function main() {
   // Immediate run on start (optional)
@@ -13,6 +14,14 @@ async function main() {
       console.log("[worker] initial monday sync:", res);
     } catch (e) {
       console.error("[worker] initial run failed", e);
+    }
+    try {
+      const res = await runTimesheetMismatchSync({
+        days: Number(process.env.MISMATCH_LOOKBACK_DAYS || 7),
+      });
+      console.log("[worker] initial mismatch sync:", res);
+    } catch (e) {
+      console.error("[worker] initial mismatch sync failed", e);
     }
   }
 
@@ -36,6 +45,16 @@ async function main() {
       console.log("[worker] monday sync result:", res);
     } catch (e) {
       console.error("[worker] monday sync failed:", e);
+    }
+
+    console.log("[worker] running timesheet mismatch sync");
+    try {
+      const res = await runTimesheetMismatchSync({
+        days: Number(process.env.MISMATCH_LOOKBACK_DAYS || 7),
+      });
+      console.log("[worker] mismatch sync result:", res);
+    } catch (e) {
+      console.error("[worker] mismatch sync failed:", e);
     }
   });
 }

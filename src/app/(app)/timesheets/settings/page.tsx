@@ -28,6 +28,7 @@ type Settings = {
   autoFixOnFetch: boolean;
   meetingHarvestProjectId?: string;
   meetingHarvestTaskId?: string;
+  notificationEmail?: string;
 };
 
 const DEFAULTS: Settings = {
@@ -41,6 +42,7 @@ const DEFAULTS: Settings = {
   autoFixOnFetch: true,
   meetingHarvestProjectId: "",
   meetingHarvestTaskId: "",
+  notificationEmail: "",
 };
 
 function normalizeProjectName(name: string): string {
@@ -152,6 +154,7 @@ export default function TimesheetSettingsPage() {
           autoFixOnFetch: Boolean(json.autoFixOnFetch),
           meetingHarvestProjectId: String(json.meetingHarvestProjectId || ""),
           meetingHarvestTaskId: String(json.meetingHarvestTaskId || ""),
+          notificationEmail: String(json.notificationEmail || ""),
         });
         // Fetch projects from Harvest (primary & alt)
         const [pRes, aRes] = await Promise.all([
@@ -797,6 +800,26 @@ export default function TimesheetSettingsPage() {
                   </SelectContent>
                 </Select>
               </div>
+            </div>
+          </section>
+
+          <Separator />
+
+          <section className="space-y-3">
+            <div className="font-medium">Alerts</div>
+            <div className="text-sm text-muted-foreground">
+              When billable timesheets don’t match between Primary and Grayquarter, AxonAI can email you
+              a link to approve the suggested fixes.
+            </div>
+            <div className="space-y-1.5 max-w-xl">
+              <Label>Notification email</Label>
+              <Input
+                value={String(settings.notificationEmail || "")}
+                onChange={(e) =>
+                  setSettings((s) => ({ ...s, notificationEmail: e.target.value }))
+                }
+                placeholder="you@company.com"
+              />
             </div>
           </section>
 
