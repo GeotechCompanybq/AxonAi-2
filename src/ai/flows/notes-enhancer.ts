@@ -1,5 +1,5 @@
 import { ai } from "@/ai/genkit";
-import { z } from "genkit";
+import { z } from "zod";
 
 export const EnhanceNotesInputSchema = z.object({
   notes: z.string().describe("Raw Jira task description or developer notes"),

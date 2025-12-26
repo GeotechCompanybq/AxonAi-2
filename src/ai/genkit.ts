@@ -1,15 +1,11 @@
-import { genkit } from "genkit";
-import { googleAI } from "@genkit-ai/googleai";
-
 const provider = process.env.AI_PROVIDER ?? "google";
 
 async function buildAI() {
   if (provider !== "nvidia") {
     // Default: Google Gemini via Genkit
-    return genkit({
-      plugins: [googleAI()],
-      model: "googleai/gemini-2.0-flash",
-    });
+    const { genkit } = await import("genkit");
+    const { googleAI } = await import("@genkit-ai/googleai");
+    return genkit({ plugins: [googleAI()], model: "googleai/gemini-2.0-flash" });
   }
 
   // NVIDIA path using direct fetch to OpenAI-compatible API

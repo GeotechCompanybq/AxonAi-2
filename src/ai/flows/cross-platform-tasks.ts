@@ -1,7 +1,7 @@
 "use server";
 
 import { ai } from "@/ai/genkit";
-import { z } from "genkit";
+import { z } from "zod";
 import { cookies } from "next/headers";
 import { adminDb } from "@/lib/firebase-admin";
 

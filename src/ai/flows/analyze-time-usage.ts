@@ -8,7 +8,7 @@
  */
 
 import { ai } from "@/ai/genkit";
-import { z } from "genkit";
+import { z } from "zod";
 import { format, parseISO } from "date-fns";
 
 // Simplified Task structure for AI input
