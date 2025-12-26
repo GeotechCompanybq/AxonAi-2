@@ -1,5 +1,4 @@
 import { NextRequest, NextResponse } from "next/server";
-import { cookies } from "next/headers";
 import { getDb, getCollectionNames } from "@/lib/mongo";
 
 // Reuse Monday tasks fetcher by importing from the route file
@@ -54,10 +53,8 @@ async function getHarvestAuth(
     connRaw.trim().toLowerCase() === "alt" ||
     connRaw.trim().toLowerCase() === "compare" ||
     connRaw.trim().toLowerCase() === "secondary";
-  const cookieStore = await cookies();
-  let token = cookieStore.get(isAlt ? "harvest_token_alt" : "harvest_token")
-    ?.value;
-  let accountId = cookieStore.get(
+  let token = req.cookies.get(isAlt ? "harvest_token_alt" : "harvest_token")?.value;
+  let accountId = req.cookies.get(
     isAlt ? "harvest_account_id_alt" : "harvest_account_id"
   )?.value;
   const uid = req.nextUrl.searchParams.get("uid") || undefined;
@@ -96,18 +93,8 @@ async function getHarvestAuth(
         : undefined;
       if (first?.id) {
         accountId = String(first.id);
-        const cookieStore2 = await cookies();
-        cookieStore2.set(
-          isAlt ? "harvest_account_id_alt" : "harvest_account_id",
-          accountId,
-          {
-          httpOnly: true,
-          sameSite: "lax",
-          secure: true,
-          path: "/",
-          maxAge: 60 * 60 * 24 * 365,
-        }
-        );
+        // In route handlers, prefer req.cookies / res.cookies rather than next/headers cookies()
+        // We'll set this cookie on the response in the main handler when needed.
         // Persist resolved account id to Firestore for consistency
         if (uid) {
           try {
@@ -200,8 +187,7 @@ export async function POST(req: NextRequest) {
     }
 
     // Monday token via cookie/DB
-    const cookieStore = await cookies();
-    let mondayToken = cookieStore.get("monday_token")?.value;
+    let mondayToken = req.cookies.get("monday_token")?.value;
     if (!mondayToken && uid) {
       try {
         const { adminDb } = await import("@/lib/firebase-admin");
