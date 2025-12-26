@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getDb, getCollectionNames } from "@/lib/mongo";
 
+export const runtime = "nodejs";
+
 // Reuse Monday tasks fetcher by importing from the route file
 // We exported fetchMondayTasks there.
 import { fetchMondayTasks } from "@/app/api/monday/tasks/route";
@@ -139,8 +141,9 @@ async function fetchHarvestEntries(
         Authorization: `Bearer ${token}`,
         "Harvest-Account-Id": accountId,
         "User-Agent":
-          process.env.HARVEST_USER_AGENT ||
-          "AxonAI (support@geotechcompany.us)",
+          ((globalThis as any)?.process?.env?.HARVEST_USER_AGENT as
+            | string
+            | undefined) ?? "AxonAI (support@geotechcompany.us)",
       },
     });
     const json = await res.json();
