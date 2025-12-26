@@ -2,6 +2,9 @@ import { NextRequest, NextResponse } from "next/server";
 import { cookies } from "next/headers";
 import { getDb, getCollectionNames } from "@/lib/mongo";
 
+export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
+
 export async function GET(req: NextRequest) {
   try {
     const { searchParams } = new URL(req.url);
@@ -28,11 +31,24 @@ export async function GET(req: NextRequest) {
       );
     }
 
-    const clientId = process.env.HARVEST_CLIENT_ID!;
-    const clientSecret = process.env.HARVEST_CLIENT_SECRET!;
+    const clientId = process.env.HARVEST_CLIENT_ID;
+    const clientSecret = process.env.HARVEST_CLIENT_SECRET;
     const redirectUri =
       process.env.HARVEST_REDIRECT_URI ||
       new URL("/api/harvest/callback", req.nextUrl.origin).toString();
+
+    if (!clientId || !clientSecret) {
+      console.error("Harvest callback missing env", {
+        hasClientId: Boolean(clientId),
+        hasClientSecret: Boolean(clientSecret),
+        origin: req.nextUrl.origin,
+        redirectUri,
+      });
+      return NextResponse.json(
+        { error: "Missing HARVEST_CLIENT_ID / HARVEST_CLIENT_SECRET" },
+        { status: 500 }
+      );
+    }
 
     // Exchange code for access token at Harvest
     const params = new URLSearchParams();
@@ -50,12 +66,15 @@ export async function GET(req: NextRequest) {
         body: params.toString(),
       }
     );
-    const tokenJson = await tokenRes.json();
+    const tokenJson = await tokenRes.json().catch(() => ({} as any));
     if (!tokenRes.ok) {
       console.error("Harvest token exchange error", { tokenJson, redirectUri });
       return NextResponse.json(
-        { error: "Token exchange failed" },
-        { status: 500 }
+        {
+          error: "Token exchange failed",
+          details: (tokenJson as any)?.error_description || (tokenJson as any)?.error || tokenJson,
+        },
+        { status: 502 }
       );
     }
 

@@ -2,6 +2,9 @@ import { NextRequest, NextResponse } from "next/server";
 import { cookies } from "next/headers";
 import { getDb, getCollectionNames } from "@/lib/mongo";
 
+export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
+
 export async function GET(req: NextRequest) {
   try {
     const connRaw = req.nextUrl.searchParams.get("conn") || "";
