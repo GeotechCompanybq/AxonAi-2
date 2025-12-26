@@ -1,7 +1,7 @@
 import type { NextRequest } from "next/server";
 import { cookies } from "next/headers";
 import { getDb, getCollectionNames } from "@/lib/mongo";
-import { adminAuth } from "@/lib/firebase-admin";
+import { getAdminAuth, getAdminDb } from "@/lib/firebase-admin";
 
 export type MicrosoftTokenSet = {
   accessToken: string;
@@ -180,6 +180,8 @@ export async function getUidFromRequest({
   if (!match) return null;
 
   try {
+    const adminAuth = getAdminAuth();
+    if (!adminAuth) return null;
     const decoded = await adminAuth.verifyIdToken(match[1]);
     return decoded.uid;
   } catch {
@@ -235,7 +237,8 @@ export async function loadMicrosoftTokensForUser({
 
   // Firestore fallback
   try {
-    const { adminDb } = await import("@/lib/firebase-admin");
+    const adminDb = getAdminDb();
+    if (!adminDb) return null;
     const snap = await adminDb.collection("users").doc(uid).get();
     const ms = snap.get("microsoft") as any;
     if (ms?.accessToken) {

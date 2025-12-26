@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getDb, getCollectionNames } from "@/lib/mongo";
-import { adminAuth } from "@/lib/firebase-admin";
+import { getAdminAuth } from "@/lib/firebase-admin";
 import {
   normalizeProjectName,
   type MismatchAction,
@@ -17,6 +17,8 @@ async function getUid(req: NextRequest): Promise<string | null> {
   const match = authHeader.match(/^Bearer (.+)$/i);
   if (!match) return null;
   try {
+    const adminAuth = getAdminAuth();
+    if (!adminAuth) return null;
     const decoded = await adminAuth.verifyIdToken(match[1]);
     return decoded.uid;
   } catch {

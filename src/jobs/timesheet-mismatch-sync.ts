@@ -1,7 +1,7 @@
 import { getDb, getCollectionNames } from "@/lib/mongo";
 import { EmailNotificationService } from "@/lib/email-notifications";
 import { detectBillableMismatches, type HarvestEntry } from "@/lib/timesheet-matching";
-import { adminAuth } from "@/lib/firebase-admin";
+import { getAdminAuth } from "@/lib/firebase-admin";
 
 type MatchJobSettings = {
   billableClientNames: string[];
@@ -91,7 +91,8 @@ async function loadUserSettings(uid: string): Promise<MatchJobSettings> {
   // Prefer Firebase Auth email (authoritative), fallback to Mongo users.email if present.
   let notificationEmail: string | undefined;
   try {
-    const authUser = await adminAuth.getUser(uid);
+    const adminAuth = getAdminAuth();
+    const authUser = adminAuth ? await adminAuth.getUser(uid) : null;
     const email = String(authUser?.email || "").trim();
     if (email) notificationEmail = email;
   } catch {}

@@ -64,7 +64,9 @@ async function getHarvestAuth(
     const uid = req.nextUrl.searchParams.get("uid") || undefined;
     if (uid) {
       try {
-        const { adminDb } = await import("@/lib/firebase-admin");
+        const { getAdminDb } = await import("@/lib/firebase-admin");
+        const adminDb = getAdminDb();
+        if (!adminDb) throw new Error("firebase_admin_not_configured");
         const snap = await adminDb.collection("users").doc(uid).get();
         token =
           token ||
@@ -100,7 +102,9 @@ async function getHarvestAuth(
         // Persist resolved account id to Firestore for consistency
         if (uid) {
           try {
-            const { adminDb } = await import("@/lib/firebase-admin");
+            const { getAdminDb } = await import("@/lib/firebase-admin");
+            const adminDb = getAdminDb();
+            if (!adminDb) throw new Error("firebase_admin_not_configured");
             if (isAlt) {
               await adminDb
                 .collection("users")
@@ -193,7 +197,9 @@ export async function POST(req: NextRequest) {
     let mondayToken = req.cookies.get("monday_token")?.value;
     if (!mondayToken && uid) {
       try {
-        const { adminDb } = await import("@/lib/firebase-admin");
+        const { getAdminDb } = await import("@/lib/firebase-admin");
+        const adminDb = getAdminDb();
+        if (!adminDb) throw new Error("firebase_admin_not_configured");
         const snap = await adminDb.collection("users").doc(uid).get();
         mondayToken = snap.get("monday.accessToken") as string | undefined;
       } catch {}

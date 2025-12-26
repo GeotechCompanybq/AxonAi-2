@@ -82,6 +82,16 @@ function readFirebaseAuthUid(): string | undefined {
   return undefined;
 }
 
+async function readJsonSafe(res: Response): Promise<any> {
+  const text = await res.text();
+  if (!text) return {};
+  try {
+    return JSON.parse(text);
+  } catch {
+    return { error: text };
+  }
+}
+
 export default function TimesheetSettingsPage() {
   const [settings, setSettings] = useState<Settings>(DEFAULTS);
   const [loading, setLoading] = useState(false);
@@ -142,7 +152,8 @@ export default function TimesheetSettingsPage() {
         const uid = readFirebaseAuthUid();
         if (uid) url.searchParams.set("uid", uid);
         const res = await fetch(url.toString(), { cache: "no-store" });
-        const json = await res.json();
+        const json = await readJsonSafe(res);
+        if (!res.ok) throw new Error(json?.error || "Failed to load settings");
         setSettings({
           requireMatchProjectNames: json.requireMatchProjectNames || [],
           excludedAltProjectNames: json.excludedAltProjectNames || [],
@@ -169,7 +180,7 @@ export default function TimesheetSettingsPage() {
                 );
                 if (uid) u2.searchParams.set("uid", uid);
                 const r2 = await fetch(u2.toString(), { cache: "no-store" });
-                const j2 = await r2.json();
+                const j2 = await readJsonSafe(r2);
                 if (r2.ok) {
                   arr = Array.isArray(j2?.projects) ? j2.projects : [];
                 }
@@ -182,7 +193,7 @@ export default function TimesheetSettingsPage() {
                 u.searchParams.set("all", "1");
                 u.searchParams.set("active", "0");
                 const r = await fetch(u.toString(), { cache: "no-store" });
-                const j = await r.json();
+                const j = await readJsonSafe(r);
                 if (r.ok) {
                   arr = Array.isArray(j?.projects) ? j.projects : [];
                 }
@@ -247,7 +258,7 @@ export default function TimesheetSettingsPage() {
               u.searchParams.set("all", "1");
               u.searchParams.set("active", "0");
               const r = await fetch(u.toString(), { cache: "no-store" });
-              const j = await r.json();
+              const j = await readJsonSafe(r);
               let arr = Array.isArray(j?.projects) ? j.projects : [];
               if (!r.ok) {
                 // Fallback: if user can't list all projects in the comparison org, use project assignments
@@ -259,7 +270,7 @@ export default function TimesheetSettingsPage() {
                   if (uid) u2.searchParams.set("uid", uid);
                   u2.searchParams.set("conn", "alt");
                   const r2 = await fetch(u2.toString(), { cache: "no-store" });
-                  const j2 = await r2.json();
+                  const j2 = await readJsonSafe(r2);
                   if (r2.ok) {
                     arr = Array.isArray(j2?.projects) ? j2.projects : [];
                   } else {
@@ -340,7 +351,7 @@ export default function TimesheetSettingsPage() {
         url.searchParams.set("uid", uid);
         url.searchParams.set("project_id", projectId);
         const res = await fetch(url.toString(), { cache: "no-store" });
-        const json = await res.json();
+        const json = await readJsonSafe(res);
         if (!res.ok) throw new Error(json?.error || "Failed to load tasks");
         const tasks = Array.isArray(json?.tasks) ? json.tasks : [];
         setHarvestTasksForMeetingProject(
@@ -371,7 +382,7 @@ export default function TimesheetSettingsPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(settings),
       });
-      const json = await res.json();
+      const json = await readJsonSafe(res);
       if (!res.ok) throw new Error(json?.error || "Save failed");
     } catch (e: any) {
       setError(e?.message || "Failed to save settings");
