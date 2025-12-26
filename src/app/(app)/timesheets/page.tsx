@@ -11,6 +11,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { DialogDescription } from "@/components/ui/dialog";
 import { Textarea } from "@/components/ui/textarea";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Input } from "@/components/ui/input";
@@ -47,6 +48,12 @@ export default function TimesheetsPage() {
   const [showPendingDraftsOnly, setShowPendingDraftsOnly] = useState(false);
   const [altConnected, setAltConnected] = useState(false);
   const [view, setView] = useState<"entries" | "compare">("entries");
+  const [meetingDialogOpen, setMeetingDialogOpen] = useState(false);
+  const [meetingPreview, setMeetingPreview] = useState<
+    { spent_date: string; hours: number; notes: string; microsoftEventId: string }[] | null
+  >(null);
+  const [meetingPosting, setMeetingPosting] = useState(false);
+  const [meetingStatus, setMeetingStatus] = useState<string | null>(null);
   const [settings, setSettings] = useState<{
     autoFixEnabled: boolean;
     autoFixOnFetch: boolean;
@@ -597,6 +604,95 @@ export default function TimesheetsPage() {
     }
   }
 
+  async function previewMeetingsToPost() {
+    try {
+      setMeetingStatus(null);
+      setMeetingPreview(null);
+      const uid = readFirebaseAuthUid();
+      if (!uid) throw new Error("Not authenticated");
+      const r = computeRange();
+      if ("all" in r && r.all) {
+        throw new Error("Pick Day/Week/Month/Custom to post meetings (not All).");
+      }
+      const fromDate = "from" in r ? String(r.from || "") : "";
+      const toDate = "to" in r ? String(r.to || "") : "";
+      if (!fromDate || !toDate) throw new Error("Pick a valid date range");
+      const tz = Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC";
+      setMeetingDialogOpen(true);
+      setMeetingPosting(true);
+      const url = new URL("/api/harvest/meetings/post", window.location.origin);
+      url.searchParams.set("uid", uid);
+      const res = await fetch(url.toString(), {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          uid,
+          from: fromDate,
+          to: toDate,
+          tz,
+          dryRun: true,
+          incrementMinutes: settings.autoFixIncrementMinutes || 15,
+        }),
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json?.error || "Failed to preview meetings");
+      const drafts = Array.isArray(json?.drafts) ? json.drafts : [];
+      setMeetingPreview(drafts);
+      setMeetingStatus(
+        drafts.length > 0
+          ? `Ready to post ${drafts.length} meeting${drafts.length === 1 ? "" : "s"} to Harvest.`
+          : "No meetings found to post (or they were already posted)."
+      );
+    } catch (e: any) {
+      setMeetingDialogOpen(true);
+      setMeetingStatus(e?.message || "Failed to preview meetings");
+    } finally {
+      setMeetingPosting(false);
+    }
+  }
+
+  async function postMeetingsToHarvest() {
+    try {
+      const uid = readFirebaseAuthUid();
+      if (!uid) throw new Error("Not authenticated");
+      const r = computeRange();
+      if ("all" in r && r.all) throw new Error("Pick a date range first");
+      const fromDate = "from" in r ? String(r.from || "") : "";
+      const toDate = "to" in r ? String(r.to || "") : "";
+      if (!fromDate || !toDate) throw new Error("Pick a valid date range");
+      const tz = Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC";
+      setMeetingPosting(true);
+      const url = new URL("/api/harvest/meetings/post", window.location.origin);
+      url.searchParams.set("uid", uid);
+      const res = await fetch(url.toString(), {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          uid,
+          from: fromDate,
+          to: toDate,
+          tz,
+          dryRun: false,
+          incrementMinutes: settings.autoFixIncrementMinutes || 15,
+        }),
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json?.error || "Failed to post meetings");
+      const createdCount = Number(json?.createdCount || 0);
+      const errorCount = Number(json?.errorCount || 0);
+      setMeetingStatus(
+        `Posted ${createdCount} meeting${createdCount === 1 ? "" : "s"} to Harvest` +
+          (errorCount ? ` (${errorCount} failed).` : ".")
+      );
+      await fetchEntries(true);
+      if (!errorCount) setMeetingPreview(null);
+    } catch (e: any) {
+      setMeetingStatus(e?.message || "Failed to post meetings");
+    } finally {
+      setMeetingPosting(false);
+    }
+  }
+
   return (
     <div className="container mx-auto py-8 space-y-6">
       <Card className="shadow-lg">
@@ -673,6 +769,17 @@ export default function TimesheetsPage() {
               )}
                 {autoFixing && <span className="ml-2">(Auto-fixing…)</span>}
               </div>
+              {view === "entries" && (
+                <div className="flex items-center gap-2">
+                  <Button
+                    variant="outline"
+                    onClick={previewMeetingsToPost}
+                    disabled={meetingPosting}
+                  >
+                    {meetingPosting ? "Loading…" : "Post meetings"}
+                  </Button>
+                </div>
+              )}
             </div>
           </div>
         {/* Compare tab content */}
@@ -1124,6 +1231,63 @@ export default function TimesheetsPage() {
           </Dialog>
         </CardContent>
       </Card>
+
+      <Dialog open={meetingDialogOpen} onOpenChange={setMeetingDialogOpen}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>Post meetings to Harvest</DialogTitle>
+            <DialogDescription>
+              Creates Harvest time entries for Microsoft/Teams meetings in the selected range.
+              Already-posted meetings are skipped (by a `[MS:&lt;id&gt;]` marker in notes).
+            </DialogDescription>
+          </DialogHeader>
+
+          {meetingStatus && (
+            <div className="text-sm text-muted-foreground">{meetingStatus}</div>
+          )}
+
+          {Array.isArray(meetingPreview) && meetingPreview.length > 0 && (
+            <div className="border rounded-md overflow-auto max-h-[360px]">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="bg-muted/40">
+                    <th className="text-left p-2">Date</th>
+                    <th className="text-right p-2">Hours</th>
+                    <th className="text-left p-2">Notes</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {meetingPreview.slice(0, 100).map((m) => (
+                    <tr key={m.microsoftEventId} className="border-t">
+                      <td className="p-2 whitespace-nowrap">{m.spent_date}</td>
+                      <td className="p-2 text-right">{Number(m.hours).toFixed(2)}</td>
+                      <td className="p-2">{m.notes}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+
+          <DialogFooter className="flex items-center justify-between gap-2">
+            <Button
+              variant="outline"
+              onClick={() => setMeetingDialogOpen(false)}
+              disabled={meetingPosting}
+            >
+              Close
+            </Button>
+            <Button
+              onClick={postMeetingsToHarvest}
+              disabled={
+                meetingPosting || !Array.isArray(meetingPreview) || meetingPreview.length === 0
+              }
+            >
+              {meetingPosting ? "Posting…" : "Post to Harvest"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

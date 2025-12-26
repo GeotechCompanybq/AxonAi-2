@@ -9,6 +9,13 @@ import { Switch } from "@/components/ui/switch";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { Checkbox } from "@/components/ui/checkbox";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 
 type Settings = {
   requireMatchProjectNames: string[];
@@ -19,6 +26,8 @@ type Settings = {
   autoFixEnabled: boolean;
   autoFixIncrementMinutes: number;
   autoFixOnFetch: boolean;
+  meetingHarvestProjectId?: string;
+  meetingHarvestTaskId?: string;
 };
 
 const DEFAULTS: Settings = {
@@ -30,7 +39,27 @@ const DEFAULTS: Settings = {
   autoFixEnabled: true,
   autoFixIncrementMinutes: 15,
   autoFixOnFetch: true,
+  meetingHarvestProjectId: "",
+  meetingHarvestTaskId: "",
 };
+
+function normalizeProjectName(name: string): string {
+  const raw = String(name || "").toLowerCase();
+  // Remove bracketed meta like [Accela], [PO ...], initials, etc.
+  const noBrackets = raw.replace(/\[[^\]]*\]/g, " ");
+  // Remove parenthetical meta
+  const noParens = noBrackets.replace(/\([^)]*\)/g, " ");
+  // Remove common ID-ish tokens and date fragments
+  const noIds = noParens
+    .replace(/\bpo\b/g, " ")
+    .replace(/\bfy\d{2,4}\b/g, " ")
+    .replace(/\bp\d{6,}\b/g, " ")
+    .replace(/\b\d{2,4}\/\d{2,4}\/\d{2,4}\b/g, " ")
+    .replace(/\b\d{2,4}-\d{2,4}\b/g, " ");
+  // Remove standalone numbers and punctuation
+  const noNums = noIds.replace(/\b\d+\b/g, " ");
+  return noNums.replace(/[^a-z]+/g, " ").replace(/\s+/g, " ").trim();
+}
 
 function readFirebaseAuthUid(): string | undefined {
   try {
@@ -56,6 +85,12 @@ export default function TimesheetSettingsPage() {
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [altProjectsError, setAltProjectsError] = useState<string | null>(null);
+  const [harvestProjectsFull, setHarvestProjectsFull] = useState<
+    { id: string; name: string; client?: string | null }[]
+  >([]);
+  const [harvestTasksForMeetingProject, setHarvestTasksForMeetingProject] =
+    useState<{ id: string; name: string; is_active?: boolean }[]>([]);
 
   const [projectInput, setProjectInput] = useState("");
   const [excludedInput, setExcludedInput] = useState("");
@@ -65,6 +100,37 @@ export default function TimesheetSettingsPage() {
   const [altFilter, setAltFilter] = useState("");
   const [clientNames, setClientNames] = useState<string[]>([]);
   const [clientFilter, setClientFilter] = useState("");
+
+  function toggleMatchProjectBySimilarity({
+    name,
+    isEnabled,
+  }: {
+    name: string;
+    isEnabled: boolean;
+  }) {
+    const key = normalizeProjectName(name);
+    setSettings((s) => {
+      if (!isEnabled) {
+        return {
+          ...s,
+          requireMatchProjectNames: (s.requireMatchProjectNames || []).filter(
+            (x) => x !== name
+          ),
+        };
+      }
+
+      const pool = Array.from(
+        new Set([...(primaryProjects || []), ...(altProjects || [])])
+      );
+      const similar = pool.filter((n) => normalizeProjectName(n) === key);
+      return {
+        ...s,
+        requireMatchProjectNames: Array.from(
+          new Set([...(s.requireMatchProjectNames || []), name, ...similar])
+        ).slice(0, 200),
+      };
+    });
+  }
 
   useEffect(() => {
     (async () => {
@@ -84,18 +150,51 @@ export default function TimesheetSettingsPage() {
           autoFixEnabled: Boolean(json.autoFixEnabled),
           autoFixIncrementMinutes: Number(json.autoFixIncrementMinutes || 15),
           autoFixOnFetch: Boolean(json.autoFixOnFetch),
+          meetingHarvestProjectId: String(json.meetingHarvestProjectId || ""),
+          meetingHarvestTaskId: String(json.meetingHarvestTaskId || ""),
         });
         // Fetch projects from Harvest (primary & alt)
         const [pRes, aRes] = await Promise.all([
           (async () => {
             try {
-              const u = new URL("/api/harvest/projects", window.location.origin);
-              if (uid) u.searchParams.set("uid", uid);
-              u.searchParams.set("all", "1");
-              const r = await fetch(u.toString(), { cache: "no-store" });
-              const j = await r.json();
-              if (r.ok) {
-                const arr = Array.isArray(j?.projects) ? j.projects : [];
+              // Prefer assigned projects (these are what users typically need)
+              let arr: any[] = [];
+              try {
+                const u2 = new URL(
+                  "/api/harvest/project-assignments",
+                  window.location.origin
+                );
+                if (uid) u2.searchParams.set("uid", uid);
+                const r2 = await fetch(u2.toString(), { cache: "no-store" });
+                const j2 = await r2.json();
+                if (r2.ok) {
+                  arr = Array.isArray(j2?.projects) ? j2.projects : [];
+                }
+              } catch {}
+
+              // Fallback: list all projects (admins / broader permissions)
+              if (arr.length === 0) {
+                const u = new URL("/api/harvest/projects", window.location.origin);
+                if (uid) u.searchParams.set("uid", uid);
+                u.searchParams.set("all", "1");
+                u.searchParams.set("active", "0");
+                const r = await fetch(u.toString(), { cache: "no-store" });
+                const j = await r.json();
+                if (r.ok) {
+                  arr = Array.isArray(j?.projects) ? j.projects : [];
+                }
+              }
+
+              if (arr.length > 0) {
+                setHarvestProjectsFull(
+                  arr
+                    .map((p: any) => ({
+                      id: String(p?.id || ""),
+                      name: String(p?.name || ""),
+                      client: p?.client ? String(p.client) : null,
+                    }))
+                    .filter((p: any) => p.id && p.name)
+                );
                 const names = Array.from(
                   new Set(arr.map((p: any) => String(p?.name || "")))
                 ).filter(Boolean);
@@ -138,14 +237,42 @@ export default function TimesheetSettingsPage() {
           })(),
           (async () => {
             try {
+              setAltProjectsError(null);
               const u = new URL("/api/harvest/projects", window.location.origin);
               if (uid) u.searchParams.set("uid", uid);
               u.searchParams.set("conn", "alt");
               u.searchParams.set("all", "1");
+              u.searchParams.set("active", "0");
               const r = await fetch(u.toString(), { cache: "no-store" });
               const j = await r.json();
-              if (r.ok) {
-                const arr = Array.isArray(j?.projects) ? j.projects : [];
+              let arr = Array.isArray(j?.projects) ? j.projects : [];
+              if (!r.ok) {
+                // Fallback: if user can't list all projects in the comparison org, use project assignments
+                try {
+                  const u2 = new URL(
+                    "/api/harvest/project-assignments",
+                    window.location.origin
+                  );
+                  if (uid) u2.searchParams.set("uid", uid);
+                  u2.searchParams.set("conn", "alt");
+                  const r2 = await fetch(u2.toString(), { cache: "no-store" });
+                  const j2 = await r2.json();
+                  if (r2.ok) {
+                    arr = Array.isArray(j2?.projects) ? j2.projects : [];
+                  } else {
+                    setAltProjectsError(
+                      j?.error ||
+                        j2?.error ||
+                        "Failed to load comparison projects from Harvest."
+                    );
+                  }
+                } catch {
+                  setAltProjectsError(
+                    j?.error || "Failed to load comparison projects from Harvest."
+                  );
+                }
+              }
+              if (arr.length > 0) {
                 const names = Array.from(
                   new Set(arr.map((p: any) => String(p?.name || "")))
                 ).filter(Boolean);
@@ -196,6 +323,38 @@ export default function TimesheetSettingsPage() {
       }
     })();
   }, []);
+
+  useEffect(() => {
+    (async () => {
+      try {
+        const uid = readFirebaseAuthUid();
+        const projectId = String(settings.meetingHarvestProjectId || "").trim();
+        if (!uid || !projectId) {
+          setHarvestTasksForMeetingProject([]);
+          return;
+        }
+        const url = new URL("/api/harvest/task-assignments", window.location.origin);
+        url.searchParams.set("uid", uid);
+        url.searchParams.set("project_id", projectId);
+        const res = await fetch(url.toString(), { cache: "no-store" });
+        const json = await res.json();
+        if (!res.ok) throw new Error(json?.error || "Failed to load tasks");
+        const tasks = Array.isArray(json?.tasks) ? json.tasks : [];
+        setHarvestTasksForMeetingProject(
+          tasks
+            .map((t: any) => ({
+              id: String(t?.id || ""),
+              name: String(t?.name || ""),
+              is_active: Boolean(t?.is_active),
+            }))
+            .filter((t: any) => t.id && t.name)
+        );
+      } catch {
+        setHarvestTasksForMeetingProject([]);
+      }
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [settings.meetingHarvestProjectId]);
 
   async function save() {
     try {
@@ -278,13 +437,10 @@ export default function TimesheetSettingsPage() {
                           <Checkbox
                             checked={checked}
                             onCheckedChange={(v: any) => {
-                              const on = Boolean(v);
-                              setSettings((s) => ({
-                                ...s,
-                                requireMatchProjectNames: on
-                                  ? Array.from(new Set([...s.requireMatchProjectNames, name]))
-                                  : s.requireMatchProjectNames.filter((x) => x !== name),
-                              }));
+                              toggleMatchProjectBySimilarity({
+                                name,
+                                isEnabled: Boolean(v),
+                              });
                             }}
                           />
                           <span className="truncate">{name}</span>
@@ -303,6 +459,9 @@ export default function TimesheetSettingsPage() {
                   onChange={(e) => setAltFilter(e.target.value)}
                   placeholder="Filter projects"
                 />
+                {altProjectsError && (
+                  <div className="text-xs text-amber-600">{altProjectsError}</div>
+                )}
                 <div className="max-h-56 overflow-auto space-y-1">
                   {altProjects
                     .filter((n) => n.toLowerCase().includes(altFilter.toLowerCase()))
@@ -313,13 +472,10 @@ export default function TimesheetSettingsPage() {
                           <Checkbox
                             checked={checked}
                             onCheckedChange={(v: any) => {
-                              const on = Boolean(v);
-                              setSettings((s) => ({
-                                ...s,
-                                requireMatchProjectNames: on
-                                  ? Array.from(new Set([...s.requireMatchProjectNames, name]))
-                                  : s.requireMatchProjectNames.filter((x) => x !== name),
-                              }));
+                              toggleMatchProjectBySimilarity({
+                                name,
+                                isEnabled: Boolean(v),
+                              });
                             }}
                           />
                           <span className="truncate">{name}</span>
@@ -560,6 +716,86 @@ export default function TimesheetSettingsPage() {
                 <div className="text-xs text-muted-foreground">
                   Common values: 5, 10, 12, 15, 20, 30, 60
                 </div>
+              </div>
+            </div>
+          </section>
+
+          <Separator />
+
+          <section className="space-y-3">
+            <div className="font-medium">Calendar → Harvest (meetings)</div>
+            <div className="text-sm text-muted-foreground">
+              Choose where your Microsoft/Teams meetings should be posted in Harvest when you
+              use the “Post meetings” button on the Timesheets page.
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              <div className="space-y-1.5">
+                <Label>Harvest project</Label>
+                <Select
+                  value={String(settings.meetingHarvestProjectId || "")}
+                  onValueChange={(v) =>
+                    setSettings((s) => ({
+                      ...s,
+                      meetingHarvestProjectId: String(v || ""),
+                      // Reset task when project changes
+                      meetingHarvestTaskId: "",
+                    }))
+                  }
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select a project" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {harvestProjectsFull.map((p) => (
+                      <SelectItem key={p.id} value={p.id}>
+                        {p.name}
+                        {p.client ? ` — ${p.client}` : ""}
+                      </SelectItem>
+                    ))}
+                    {harvestProjectsFull.length === 0 && (
+                      <SelectItem value="__none__" disabled>
+                        No projects (connect Harvest first)
+                      </SelectItem>
+                    )}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="space-y-1.5">
+                <Label>Harvest task</Label>
+                <Select
+                  value={String(settings.meetingHarvestTaskId || "")}
+                  onValueChange={(v) =>
+                    setSettings((s) => ({ ...s, meetingHarvestTaskId: String(v || "") }))
+                  }
+                  disabled={!String(settings.meetingHarvestProjectId || "").trim()}
+                >
+                  <SelectTrigger>
+                    <SelectValue
+                      placeholder={
+                        String(settings.meetingHarvestProjectId || "").trim()
+                          ? "Select a task"
+                          : "Select a project first"
+                      }
+                    />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {harvestTasksForMeetingProject
+                      .filter((t) => t.is_active !== false)
+                      .map((t) => (
+                        <SelectItem key={t.id} value={t.id}>
+                          {t.name}
+                        </SelectItem>
+                      ))}
+                    {String(settings.meetingHarvestProjectId || "").trim() &&
+                      harvestTasksForMeetingProject.length === 0 && (
+                        <SelectItem value="__none__" disabled>
+                          No tasks found for this project
+                        </SelectItem>
+                      )}
+                  </SelectContent>
+                </Select>
               </div>
             </div>
           </section>

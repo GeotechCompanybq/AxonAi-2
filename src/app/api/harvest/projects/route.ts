@@ -202,6 +202,13 @@ async function listAccounts(token: string): Promise<string[]> {
     },
   });
   const json = await res.json();
+  if (!res.ok) {
+    throw new Error(
+      (json as any)?.error_description ||
+        (json as any)?.error ||
+        JSON.stringify(json)
+    );
+  }
   const ids = Array.isArray(json?.accounts) ? json.accounts.map((a: any) => String(a?.id)).filter(Boolean) : [];
   return ids;
 }
@@ -258,6 +265,9 @@ export async function GET(req: NextRequest) {
 
     const all = req.nextUrl.searchParams.get("all") === "1";
     const activeOnly = req.nextUrl.searchParams.get("active") !== "0";
+    const connRaw = (req.nextUrl.searchParams.get("conn") || "").trim().toLowerCase();
+    const isAlt = connRaw === "alt" || connRaw === "compare" || connRaw === "secondary";
+    const accountCookieKey = isAlt ? "harvest_account_id_alt" : "harvest_account_id";
     let projects: any[] = [];
     try {
       projects = await fetchProjects(token, accountId, all, activeOnly);
@@ -266,61 +276,77 @@ export async function GET(req: NextRequest) {
       // Handle "Not authorized" by probing all accessible accounts and persisting the working one
       if (isHarvestAuthErrorMessage(msg)) {
         const ids = await listAccounts(token);
+        const cookieStore2 = await cookies();
+        const uid = req.nextUrl.searchParams.get("uid") || undefined;
+        let chosen: string | null = null;
+
         for (const id of ids) {
+          // Try the cheapest probe first
           const ok = await probeAccount(token, id);
           if (!ok) continue;
-          // Persist cookie
-          const cookieStore2 = await cookies();
-          cookieStore2.set("harvest_account_id", id, {
-            httpOnly: true,
-            sameSite: "lax",
-            secure: true,
-            path: "/",
-            maxAge: 60 * 60 * 24 * 365,
-          });
-          // If this request was for the alt connection, set alt cookie too
-          const isAlt =
-            (req.nextUrl.searchParams.get("conn") || "").trim().toLowerCase() === "alt" ||
-            (req.nextUrl.searchParams.get("conn") || "").trim().toLowerCase() === "compare" ||
-            (req.nextUrl.searchParams.get("conn") || "").trim().toLowerCase() === "secondary";
-          if (isAlt) {
-            cookieStore2.set("harvest_account_id_alt", id, {
-              httpOnly: true,
-              sameSite: "lax",
-              secure: true,
-              path: "/",
-              maxAge: 60 * 60 * 24 * 365,
-            });
-          }
-          // Persist to DB/Firestore if uid present
-          const uid = req.nextUrl.searchParams.get("uid") || undefined;
-          if (uid) {
+          chosen = id;
+          break;
+        }
+
+        // If /users/me probe is blocked for some reason, try fetching a small projects page per account
+        if (!chosen) {
+          for (const id of ids) {
             try {
-              const db = await getDb();
-              const { users } = getCollectionNames();
-              const field = isAlt ? "harvestAlt.accountId" : "harvest.accountId";
-              await db.collection(users).updateOne(
-                { uid },
-                { $set: { uid, [field]: id } as any },
-                { upsert: true }
-              );
-            } catch {}
-            try {
-              const { adminDb } = await import("@/lib/firebase-admin");
-              if (isAlt) {
-                await adminDb.collection("users").doc(uid).set({ harvestAlt: { accountId: id } }, { merge: true });
-              } else {
-                await adminDb.collection("users").doc(uid).set({ harvest: { accountId: id } }, { merge: true });
+              const test = await fetchProjects(token, id, false, activeOnly);
+              if (Array.isArray(test)) {
+                chosen = id;
+                break;
               }
             } catch {}
           }
-          // Retry
-          projects = await fetchProjects(token, id, all, activeOnly);
-          break;
         }
-        if (!projects || projects.length === 0) {
-          throw new Error("Not authorized");
+
+        if (!chosen) {
+          return NextResponse.json(
+            { error: "Not authorized (Harvest account mismatch). Reconnect Harvest (Comparison)." },
+            { status: 403 }
+          );
         }
+
+        // Persist cookie ONLY for the connection slot we are querying
+        cookieStore2.set(accountCookieKey, chosen, {
+          httpOnly: true,
+          sameSite: "lax",
+          secure: true,
+          path: "/",
+          maxAge: 60 * 60 * 24 * 365,
+        });
+
+        // Persist to DB/Firestore if uid present
+        if (uid) {
+          try {
+            const db = await getDb();
+            const { users } = getCollectionNames();
+            const field = isAlt ? "harvestAlt.accountId" : "harvest.accountId";
+            await db.collection(users).updateOne(
+              { uid },
+              { $set: { uid, [field]: chosen } as any },
+              { upsert: true }
+            );
+          } catch {}
+          try {
+            const { adminDb } = await import("@/lib/firebase-admin");
+            if (isAlt) {
+              await adminDb
+                .collection("users")
+                .doc(uid)
+                .set({ harvestAlt: { accountId: chosen } }, { merge: true });
+            } else {
+              await adminDb
+                .collection("users")
+                .doc(uid)
+                .set({ harvest: { accountId: chosen } }, { merge: true });
+            }
+          } catch {}
+        }
+
+        // Retry with the chosen account id
+        projects = await fetchProjects(token, chosen, all, activeOnly);
       } else {
         throw e;
       }

@@ -14,6 +14,9 @@ type TimesheetSettings = {
   autoFixEnabled?: boolean;
   autoFixIncrementMinutes?: number; // e.g., 15
   autoFixOnFetch?: boolean; // run automatically on fetch
+  // Calendar → Harvest posting
+  meetingHarvestProjectId?: string; // Harvest project_id used when posting meetings
+  meetingHarvestTaskId?: string; // Harvest task_id used when posting meetings
   // Future expansion
   updatedAt?: string;
 };
@@ -27,6 +30,8 @@ const DEFAULTS: Omit<TimesheetSettings, "uid"> = {
   autoFixEnabled: true,
   autoFixIncrementMinutes: 15,
   autoFixOnFetch: true,
+  meetingHarvestProjectId: "",
+  meetingHarvestTaskId: "",
   updatedAt: "",
 };
 
@@ -65,6 +70,8 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     const body = (await req.json().catch(() => ({}))) as Partial<TimesheetSettings>;
     const now = new Date().toISOString();
+    const meetingHarvestProjectId = String(body.meetingHarvestProjectId || "").trim();
+    const meetingHarvestTaskId = String(body.meetingHarvestTaskId || "").trim();
     const settings: TimesheetSettings = {
       uid,
       requireMatchProjectNames: Array.isArray(body.requireMatchProjectNames)
@@ -88,6 +95,8 @@ export async function POST(req: NextRequest) {
           body.autoFixIncrementMinutes ?? DEFAULTS.autoFixIncrementMinutes
         ) || 15,
       autoFixOnFetch: Boolean(body.autoFixOnFetch ?? DEFAULTS.autoFixOnFetch),
+      meetingHarvestProjectId,
+      meetingHarvestTaskId,
       updatedAt: now,
     };
     // Boundaries
@@ -97,6 +106,17 @@ export async function POST(req: NextRequest) {
       )
     ) {
       settings.autoFixIncrementMinutes = 15;
+    }
+
+    // Basic validation: require both or neither
+    if (
+      (settings.meetingHarvestProjectId && !settings.meetingHarvestTaskId) ||
+      (!settings.meetingHarvestProjectId && settings.meetingHarvestTaskId)
+    ) {
+      return NextResponse.json(
+        { error: "Meeting posting requires both Harvest project and task." },
+        { status: 400 }
+      );
     }
     const db = await getDb();
     const { timesheetSettings } = getCollectionNames();
