@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
 import { cookies } from "next/headers";
-import { getDb, getCollectionNames } from "@/lib/mongo";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -26,6 +25,7 @@ export async function GET(req: NextRequest) {
       if (uid) {
         // Check MongoDB first (matching projects endpoint logic)
         try {
+          const { getDb, getCollectionNames } = await import("@/lib/mongo");
           const db = await getDb();
           const { users } = getCollectionNames();
           const doc = await db.collection(users).findOne({ uid });

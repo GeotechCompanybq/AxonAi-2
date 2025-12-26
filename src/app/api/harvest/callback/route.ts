@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
 import { cookies } from "next/headers";
-import { getDb, getCollectionNames } from "@/lib/mongo";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -128,6 +127,7 @@ export async function GET(req: NextRequest) {
     // Optionally persist in Mongo when uid is present
     if (uid) {
       try {
+        const { getDb, getCollectionNames } = await import("@/lib/mongo");
         const db = await getDb();
         const { users } = getCollectionNames();
         const isAlt =
