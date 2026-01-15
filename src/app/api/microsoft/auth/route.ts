@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { buildMicrosoftAuthorizeUrl } from "@/lib/microsoft";
+import { buildMicrosoftAuthorizeUrl, getMicrosoftClientSecret } from "@/lib/microsoft";
 
 export async function GET(req: NextRequest) {
   const clientId = process.env.MICROSOFT_CLIENT_ID;
@@ -9,11 +9,12 @@ export async function GET(req: NextRequest) {
       { status: 500 }
     );
   }
-  if (!process.env.MICROSOFT_CLIENT_SECRET) {
-    return NextResponse.json(
-      { error: "Missing MICROSOFT_CLIENT_SECRET" },
-      { status: 500 }
-    );
+  try {
+    // Validate early so misconfig shows up before user gets redirected to Microsoft.
+    getMicrosoftClientSecret();
+  } catch (e) {
+    const message = e instanceof Error ? e.message : "Invalid MICROSOFT_CLIENT_SECRET";
+    return NextResponse.json({ error: message }, { status: 500 });
   }
 
   const uid = req.nextUrl.searchParams.get("uid") || undefined;

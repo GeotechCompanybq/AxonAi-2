@@ -1,10 +1,10 @@
-![dey Weaver Demo](https://raw.githubusercontent.com/Geotechcompany6673/deyWeaver/master/public/demo34.gif)
+![AxonAI Dashboard](public/dashboard.png)
 
-DeyWeaver is an AI-integrated productivity tool that helps users organize their day, prioritize tasks, and optimize time management through intelligent scheduling. Powered by AI algorithms, it dynamically suggests daily plans based on task urgency, deadlines, estimated durations, and user preferences. Ideal for students, professionals, and productivity nerds.
+AxonAI is an AI-integrated productivity and planning tool that helps you organize your day, prioritize tasks, and optimize time management through intelligent scheduling. Powered by AI, it can generate daily plans, break down large tasks, reallocate schedules when plans change, and assist with meeting preparation and analytics.
 
 ## ✨ Features
 
-dey Weaver comes packed with features to help you stay organized and achieve your goals:
+AxonAI comes packed with features to help you stay organized and achieve your goals:
 
 - **AI-Powered Schedule Creation:** Describe your ideal day or goals in natural language, and let our AI craft a smart, segmented schedule with work and rest times.
 - **Comprehensive Task Management:** Create, view, update, delete, and track your daily to-dos. Filter tasks by status, priority, and search terms.
@@ -40,18 +40,18 @@ To get a local copy up and running, follow these simple steps.
 
 1.  Clone the repo:
     ```sh
-    git clone https://github.com/Geotechcompany6673/deyweaver.git
+    git clone https://github.com/Geotechcompany/AxonAi.git
     ```
 2.  Navigate to the project directory:
     ```sh
-    cd deyweaver
+    cd AxonAi
     ```
 3.  Install NPM packages:
     ```sh
     npm install
     ```
 4.  Set up your environment variables:
-    Create a `.env.local` file in the root directory and add your Google AI API Key:
+    Copy `.env.example` → `.env.local` and fill in real values. If you’re using Google Gemini via Genkit, set your API key; if you’re using NVIDIA as the AI provider, set the NVIDIA vars:
     ```env
     GOOGLE_API_KEY=YOUR_GOOGLE_API_KEY
     ```
@@ -75,7 +75,7 @@ This app can pull the signed-in user’s calendar via **Microsoft Graph**. A “
 - **Add env vars**
   - Copy `.env.example` → `.env.local` and fill:
     - `MICROSOFT_CLIENT_ID`
-    - `MICROSOFT_CLIENT_SECRET`
+    - `MICROSOFT_CLIENT_SECRET` (**use the secret VALUE, not the Secret ID**)
     - (optional) `MICROSOFT_TENANT_ID`
 
 ### Endpoints
@@ -99,11 +99,11 @@ Don't forget to give the project a star! Thanks again!
 ## 📜 License
 
 This project is licensed under the [MIT License](LICENSE).  
-© Geotechcompany6673 — Geotechcompanybrite@gmail.com
+© Geotechcompany — Geotechcompanybrite@gmail.com
 
 ## 🏆 Acknowledgements & Ownership
 
-This project,Axon Ai, is envisioned, developed, and maintained by **Geotechcompany Singh ([@Geotechcompany6673](https://github.com/Geotechcompany6673))**. All credit for the concept and core development goes to him.
+This project, AxonAI, is envisioned, developed, and maintained by **Geotechcompany Singh ([@Geotechcompany6673](https://github.com/Geotechcompany6673))**. All credit for the concept and core development goes to him.
 
 A big thank you to the open-source community for the tools and libraries that make projects like this possible!
 
@@ -111,7 +111,7 @@ A big thank you to the open-source community for the tools and libraries that ma
 
 ## Powered By
 
-[![Our Valued Supporters](https://raw.githubusercontent.com/Geotechcompany6673/DeyWeaver/refs/heads/master/public/Untitled%20design.png)]()
+[![Our Valued Supporters](public/Untitled%20design.png)]()
 
 This project is made possible by the generous funding and support from these amazing companies, helping this project to be free forever and open-source:
 

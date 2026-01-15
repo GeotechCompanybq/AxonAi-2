@@ -12,6 +12,29 @@ export type MicrosoftTokenSet = {
   updatedAt?: number;
 };
 
+function looksLikeGuid(value: string): boolean {
+  // Azure "Secret ID" is typically a GUID. "Secret Value" is usually a long random string.
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
+    value.trim()
+  );
+}
+
+export function getMicrosoftClientSecret(): string {
+  const raw = (process.env.MICROSOFT_CLIENT_SECRET || "").trim();
+  if (!raw) {
+    throw new Error("Missing MICROSOFT_CLIENT_SECRET");
+  }
+  if (looksLikeGuid(raw)) {
+    throw new Error(
+      [
+        "Invalid Microsoft client secret: MICROSOFT_CLIENT_SECRET looks like an Entra 'Secret ID' (GUID).",
+        "You must use the secret *Value* (shown once when you create the secret), not the Secret ID.",
+      ].join(" ")
+    );
+  }
+  return raw;
+}
+
 export function getMicrosoftTenantId(): string {
   return (process.env.MICROSOFT_TENANT_ID || "common").trim() || "common";
 }
@@ -66,7 +89,7 @@ export async function exchangeMicrosoftCodeForTokens({
 }): Promise<MicrosoftTokenSet> {
   const tenant = getMicrosoftTenantId();
   const clientId = process.env.MICROSOFT_CLIENT_ID!;
-  const clientSecret = process.env.MICROSOFT_CLIENT_SECRET!;
+  const clientSecret = getMicrosoftClientSecret();
   const redirectUri = getMicrosoftRedirectUri({ req });
 
   const params = new URLSearchParams();
@@ -120,7 +143,7 @@ export async function refreshMicrosoftTokens({
 }): Promise<MicrosoftTokenSet> {
   const tenant = getMicrosoftTenantId();
   const clientId = process.env.MICROSOFT_CLIENT_ID!;
-  const clientSecret = process.env.MICROSOFT_CLIENT_SECRET!;
+  const clientSecret = getMicrosoftClientSecret();
   const scope = getMicrosoftScopes();
 
   const params = new URLSearchParams();

@@ -29,18 +29,19 @@ export function OrgSidebarNav() {
         (item.href !== "/org/dashboard" && pathname.startsWith(item.href));
       return (
         <SidebarMenuItem key={item.href}>
-          <Link href={item.href} legacyBehavior passHref>
-            <SidebarMenuButton
-              isActive={isActive}
-              tooltip={item.label}
-              className={cn(
-                "w-full justify-start rounded-xl",
-                "transition-all duration-300 hover:translate-x-0.5",
-                "bg-transparent/10 backdrop-blur md:hover:bg-primary/10",
-                isActive &&
-                  "bg-primary/15 text-primary shadow-[0_0_24px_rgba(0,212,255,0.35)] border border-primary/20"
-              )}
-            >
+          <SidebarMenuButton
+            asChild
+            isActive={isActive}
+            tooltip={item.label}
+            className={cn(
+              "w-full justify-start rounded-xl",
+              "transition-all duration-300 hover:translate-x-0.5",
+              "bg-transparent/10 backdrop-blur md:hover:bg-primary/10",
+              isActive &&
+                "bg-primary/15 text-primary shadow-[0_0_24px_rgba(0,212,255,0.35)] border border-primary/20"
+            )}
+          >
+            <Link href={item.href}>
               <item.icon
                 className={cn(
                   "h-5 w-5 drop-shadow-[0_0_8px_rgba(0,212,255,0.45)]",
@@ -48,8 +49,8 @@ export function OrgSidebarNav() {
                 )}
               />
               <span>{item.label}</span>
-            </SidebarMenuButton>
-          </Link>
+            </Link>
+          </SidebarMenuButton>
         </SidebarMenuItem>
       );
     });
