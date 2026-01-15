@@ -24,17 +24,21 @@ import {
   SidebarGroupLabel,
 } from "@/components/ui/sidebar";
 
-const mainNavItems = [
-  { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
+const navCore = [{ href: "/dashboard", label: "Overview", icon: LayoutDashboard }];
+
+const navPlanning = [
   { href: "/schedule/create", label: "Create Schedule", icon: CalendarPlus },
   { href: "/tasks", label: "My Tasks", icon: ListChecks },
   { href: "/calendar", label: "Calendar", icon: CalendarDays },
+];
+
+const navInsights = [
   { href: "/analytics", label: "Analytics", icon: BarChart3 },
   { href: "/timesheets", label: "Timesheets", icon: Clock4 },
   { href: "/weekly-summary", label: "Weekly Summary", icon: BarChart3 },
 ];
 
-const secondaryNavItems = [
+const navSupport = [
   { href: "/settings", label: "Settings", icon: Settings },
   { href: "/help", label: "Help & Support", icon: LifeBuoy },
   { href: "/talk-to-founder", label: "Talk to Founder", icon: MessagesSquare },
@@ -42,18 +46,30 @@ const secondaryNavItems = [
 
 export function SidebarNav() {
   const pathname = usePathname();
-  const { setOpen } = useSidebar();
+  const { setOpen, state } = useSidebar();
   const [showTsPanel, setShowTsPanel] = useState(false);
   const [panelTop, setPanelTop] = useState(0);
   const [pinnedTs, setPinnedTs] = useState(false);
+  const [openedByHover, setOpenedByHover] = useState(false);
 
   const openTs = useCallback(() => setShowTsPanel(true), []);
   const closeTs = useCallback(() => {
     if (!pinnedTs) setShowTsPanel(false);
   }, [pinnedTs]);
 
+  const baseButtonClass =
+    "w-full justify-start rounded-xl relative overflow-hidden " +
+    "transition-all duration-300 ease-out " +
+    "bg-transparent/10 backdrop-blur md:hover:bg-white/10 " +
+    "hover:shadow-[0_0_0_1px_hsl(var(--ring)/0.18),0_14px_40px_rgba(0,0,0,0.35)] " +
+    "hover:-translate-y-[1px]";
+
+  const activeClass =
+    "bg-primary/15 text-primary border border-primary/20 " +
+    "shadow-[0_0_0_1px_hsl(var(--ring)/0.25),0_0_28px_hsl(var(--ring)/0.25)]";
+
   const renderNavItems = (
-    items: typeof mainNavItems // Use a more general type or typeof secondaryNavItems if they differ
+    items: Array<{ href: string; label: string; icon: any }>
   ) =>
     items.map((item) => {
       const isActive =
@@ -64,18 +80,25 @@ export function SidebarNav() {
           key={item.href}
           onMouseEnter={(e) => {
             if (item.href === "/timesheets") {
+              if (state === "collapsed") {
+                setOpen(true);
+                setOpenedByHover(true);
+              }
               const rect = (
                 e.currentTarget as HTMLElement
               ).getBoundingClientRect();
               setPanelTop(Math.round(rect.top));
               openTs();
-              setOpen(true);
             }
           }}
           onMouseLeave={(e) => {
             if (item.href === "/timesheets") {
               // Slight delay to allow moving into the panel
               setTimeout(() => closeTs(), 80);
+              if (openedByHover && !pinnedTs) {
+                setTimeout(() => setOpen(false), 120);
+                setOpenedByHover(false);
+              }
             }
           }}
         >
@@ -84,17 +107,16 @@ export function SidebarNav() {
             isActive={isActive}
             tooltip={item.label}
             className={cn(
-              "w-full justify-start rounded-xl",
-              "transition-all duration-300 hover:translate-x-0.5",
-              "bg-transparent/10 backdrop-blur md:hover:bg-primary/10",
-              isActive &&
-                "bg-primary/15 text-primary shadow-[0_0_24px_rgba(0,212,255,0.35)] border border-primary/20"
+              baseButtonClass,
+              "hover:translate-x-0.5",
+              isActive && activeClass
             )}
           >
             <Link href={item.href}>
               <item.icon
                 className={cn(
-                  "h-5 w-5 drop-shadow-[0_0_8px_rgba(0,212,255,0.45)]",
+                  "h-5 w-5 drop-shadow-[0_0_10px_rgba(0,212,255,0.35)]",
+                  "group-data-[collapsible=icon]:h-7 group-data-[collapsible=icon]:w-7",
                   isActive ? "text-primary" : "text-foreground"
                 )}
               />
@@ -207,17 +229,29 @@ export function SidebarNav() {
   return (
     <nav className="flex flex-col h-full">
       <SidebarGroup className="p-2">
-        <SidebarGroupLabel className="text-muted-foreground/80">
-          Menu
+        <SidebarGroupLabel className="text-muted-foreground/80 group-data-[collapsible=icon]:hidden">
+          Dashboard
         </SidebarGroupLabel>
-        <SidebarMenu>{renderNavItems(mainNavItems)}</SidebarMenu>
+        <SidebarMenu>{renderNavItems(navCore)}</SidebarMenu>
+      </SidebarGroup>
+      <SidebarGroup className="p-2 pt-0">
+        <SidebarGroupLabel className="text-muted-foreground/80 group-data-[collapsible=icon]:hidden">
+          Planning
+        </SidebarGroupLabel>
+        <SidebarMenu>{renderNavItems(navPlanning)}</SidebarMenu>
+      </SidebarGroup>
+      <SidebarGroup className="p-2 pt-0">
+        <SidebarGroupLabel className="text-muted-foreground/80 group-data-[collapsible=icon]:hidden">
+          Insights
+        </SidebarGroupLabel>
+        <SidebarMenu>{renderNavItems(navInsights)}</SidebarMenu>
       </SidebarGroup>
       <div className="mt-auto">
         <SidebarGroup className="p-2">
-          <SidebarGroupLabel className="text-muted-foreground/80">
+          <SidebarGroupLabel className="text-muted-foreground/80 group-data-[collapsible=icon]:hidden">
             Support
           </SidebarGroupLabel>
-          <SidebarMenu>{renderNavItems(secondaryNavItems)}</SidebarMenu>
+          <SidebarMenu>{renderNavItems(navSupport)}</SidebarMenu>
         </SidebarGroup>
       </div>
     </nav>

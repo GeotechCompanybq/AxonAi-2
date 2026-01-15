@@ -45,6 +45,7 @@ export function OrgSidebarNav() {
               <item.icon
                 className={cn(
                   "h-5 w-5 drop-shadow-[0_0_8px_rgba(0,212,255,0.45)]",
+                  "group-data-[collapsible=icon]:h-7 group-data-[collapsible=icon]:w-7",
                   isActive ? "text-primary" : "text-foreground"
                 )}
               />
@@ -58,7 +59,7 @@ export function OrgSidebarNav() {
   return (
     <nav className="flex flex-col h-full">
       <SidebarGroup className="p-2">
-        <SidebarGroupLabel className="text-muted-foreground/80">
+        <SidebarGroupLabel className="text-muted-foreground/80 group-data-[collapsible=icon]:hidden">
           Organization
         </SidebarGroupLabel>
         <SidebarMenu>{renderNavItems(mainNavItems)}</SidebarMenu>
