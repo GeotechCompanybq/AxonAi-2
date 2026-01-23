@@ -65,20 +65,35 @@ async function buildAI() {
     }) {
       return async (input: TIn): Promise<{ output: TOut }> => {
         const messages = buildMessages(cfg.prompt, input);
-        const resp = await fetch(`${baseURL}/chat/completions`, {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Accept: "application/json",
-            Authorization: `Bearer ${apiKey}`,
-          },
-          body: JSON.stringify({
-            model,
-            messages,
-            temperature: 0.2,
-            // response_format may be ignored; we'll parse robustly
-          }),
-        });
+        const timeoutMs = Number(process.env.NVIDIA_TIMEOUT_MS || 20000);
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+
+        let resp: Response;
+        try {
+          resp = await fetch(`${baseURL}/chat/completions`, {
+            method: "POST",
+            signal: controller.signal,
+            headers: {
+              "Content-Type": "application/json",
+              Accept: "application/json",
+              Authorization: `Bearer ${apiKey}`,
+            },
+            body: JSON.stringify({
+              model,
+              messages,
+              temperature: 0.2,
+              // response_format may be ignored; we'll parse robustly
+            }),
+          });
+        } catch (e: any) {
+          if (e?.name === "AbortError") {
+            throw new Error(`NVIDIA API timeout after ${timeoutMs}ms`);
+          }
+          throw e;
+        } finally {
+          clearTimeout(timeoutId);
+        }
         const raw = await resp.text();
         let data: any;
         try {

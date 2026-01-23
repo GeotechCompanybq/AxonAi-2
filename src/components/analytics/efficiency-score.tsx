@@ -9,67 +9,32 @@ import {
   CardDescription,
 } from "@/components/ui/card";
 import { TrendingUp, Zap, AlertCircle, CheckCircle2 } from "lucide-react";
-import { handleCalculateEfficiencyScore } from "@/lib/actions";
 import { getTasksFromLocalStorage } from "@/lib/task-storage";
-import type { Task } from "@/types";
 import { format } from "date-fns";
 import { IconSpinner } from "@/components/icons";
-import type { CalculateEfficiencyScoreOutput } from "@/ai/flows/calculate-efficiency-score";
-import { EmailNotificationService } from "@/lib/email-notifications";
-import { useAuth } from "@/hooks/use-auth";
+import { computeEfficiencyScoreLocal } from "@/lib/local-insights";
 
 export function EfficiencyScore() {
-  const { user } = useAuth();
-  const [scoreData, setScoreData] =
-    useState<CalculateEfficiencyScoreOutput | null>(null);
+  const [scoreData, setScoreData] = useState<
+    | {
+        score: number;
+        message: string;
+        positiveFeedback?: string;
+        improvementSuggestion?: string;
+      }
+    | null
+  >(null);
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
-    async function fetchData() {
+    function compute() {
       setIsLoading(true);
       const tasks = getTasksFromLocalStorage();
       const currentDate = format(new Date(), "yyyy-MM-dd");
 
-      if (tasks.length === 0) {
-        setScoreData({
-          score: 0,
-          message: "No tasks available to calculate efficiency.",
-        });
-        setIsLoading(false);
-        return;
-      }
-
       try {
-        const aiTasks = tasks.map((task) => ({
-          name: task.name,
-          dueDate: task.dueDate,
-          priority: task.priority,
-          status: task.status,
-          category: task.category,
-        }));
-        const result = await handleCalculateEfficiencyScore({
-          tasks: aiTasks,
-          currentDate,
-        });
+        const result = computeEfficiencyScoreLocal(tasks, currentDate);
         setScoreData(result);
-
-        // Send email notification if user is logged in and score is below 70
-        if (user?.email && result.score < 70) {
-          await fetch("/api/notify/email", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              to: user.email,
-              notificationData: {
-                type: "efficiency_score",
-                data: {
-                  efficiencyScore: result.score,
-                  efficiencyMessage: result.message,
-                },
-              },
-            }),
-          });
-        }
       } catch (error) {
         console.error("Error fetching efficiency score:", error);
         setScoreData({
@@ -80,8 +45,8 @@ export function EfficiencyScore() {
         setIsLoading(false);
       }
     }
-    fetchData();
-  }, [user]);
+    compute();
+  }, []);
 
   let scoreColor = "text-primary"; // Default gold-ish
   let IconComponent = Zap;
@@ -129,18 +94,17 @@ export function EfficiencyScore() {
               {scoreData.score}%
             </div>
             {scoreData.positiveFeedback && (
-              <p className="text-xs sm:text-sm text-green-600 mt-2">
+              <p className="text-xs sm:text-sm text-green-400 mt-2">
                 {scoreData.positiveFeedback}
               </p>
             )}
             {scoreData.improvementSuggestion && (
-              <p className="text-xs sm:text-sm text-amber-600 mt-2">
+              <p className="text-xs sm:text-sm text-amber-400 mt-2">
                 {scoreData.improvementSuggestion}
               </p>
             )}
             <p className="text-xs text-muted-foreground mt-1">
-              Based on AI analysis of task completion, timeliness, and
-              priorities.
+              Based on local analysis of task completion, timeliness, and priorities.
             </p>
           </>
         ) : (

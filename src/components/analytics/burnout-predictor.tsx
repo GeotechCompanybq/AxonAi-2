@@ -10,14 +10,11 @@ import {
 } from "@/components/ui/card";
 import { AlertTriangle, ShieldCheck, Coffee } from "lucide-react";
 import { Progress } from "@/components/ui/progress";
-import { handlePredictBurnout } from "@/lib/actions";
 import { getTasksFromLocalStorage } from "@/lib/task-storage";
-import type { Task } from "@/types";
 import { format } from "date-fns";
 import { IconSpinner } from "@/components/icons";
 import type { PredictBurnoutOutput } from "@/ai/flows/predict-burnout";
-import { EmailNotificationService } from "@/lib/email-notifications";
-import { useAuth } from "@/hooks/use-auth";
+import { computeBurnoutRiskLocal } from "@/lib/local-insights";
 
 const riskConfig = {
   low: {
@@ -53,59 +50,21 @@ function normalizeRiskLevel(level?: string): keyof typeof riskConfig {
 }
 
 export function BurnoutPredictor() {
-  const { user } = useAuth();
   const [burnoutData, setBurnoutData] = useState<PredictBurnoutOutput | null>(
     null
   );
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
-    async function fetchData() {
+    function compute() {
       setIsLoading(true);
       const tasks = getTasksFromLocalStorage();
       const currentDate = format(new Date(), "yyyy-MM-dd");
-
-      if (tasks.length === 0) {
-        setBurnoutData({
-          riskLevel: "low",
-          progressValue: 10,
-          message: "No tasks to analyze. Enjoy your free time!",
-        });
-        setIsLoading(false);
-        return;
-      }
+      const now = new Date();
 
       try {
-        const aiTasks = tasks.map((task) => ({
-          name: task.name,
-          dueDate: task.dueDate,
-          priority: task.priority,
-          status: task.status,
-          category: task.category,
-        }));
-        const result = await handlePredictBurnout({
-          tasks: aiTasks,
-          currentDate,
-        });
-        setBurnoutData(result);
-
-        // Send email notification via server API if risk is not low
-        if (user?.email && result.riskLevel !== "low") {
-          await fetch("/api/notify/email", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              to: user.email,
-              notificationData: {
-                type: "burnout_risk",
-                data: {
-                  burnoutRiskLevel: result.riskLevel,
-                  burnoutMessage: result.message,
-                },
-              },
-            }),
-          });
-        }
+        const result = computeBurnoutRiskLocal(tasks, now, currentDate);
+        setBurnoutData(result as any);
       } catch (error) {
         console.error("Error fetching burnout prediction:", error);
         setBurnoutData({
@@ -117,8 +76,8 @@ export function BurnoutPredictor() {
         setIsLoading(false);
       }
     }
-    fetchData();
-  }, [user]);
+    compute();
+  }, []);
 
   const riskKey = normalizeRiskLevel(burnoutData?.riskLevel);
   const currentConfig = riskConfig[riskKey];
@@ -153,7 +112,7 @@ export function BurnoutPredictor() {
           <div className="text-center py-4">
             <IconSpinner className="h-8 w-8 text-primary mb-2 mx-auto" />
             <p className="text-muted-foreground">
-              AI is analyzing your risk...
+              Analyzing your risk...
             </p>
           </div>
         ) : burnoutData ? (
@@ -195,7 +154,7 @@ export function BurnoutPredictor() {
 
             <p className="text-sm text-muted-foreground mt-2">{message}</p>
             <p className="text-xs text-muted-foreground mt-1">
-              Based on AI analysis of your current task patterns.
+              Based on local analysis of your current task patterns.
             </p>
           </>
         ) : (

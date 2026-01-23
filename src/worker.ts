@@ -5,8 +5,17 @@ dotenv.config({ path: ".env.local", override: true });
 import cron from "node-cron";
 import { runMondaySync } from "@/jobs/monday-sync";
 import { runTimesheetMismatchSync } from "@/jobs/timesheet-mismatch-sync";
+import { runSyncAll } from "@/jobs/sync-all";
 
 async function main() {
+  // Optional one-shot mode: `npm run worker -- --sync-all`
+  if (process.argv.includes("--sync-all")) {
+    const days = Number(process.env.HARVEST_SYNC_DAYS || 30);
+    const res = await runSyncAll({ days, includeMismatch: true });
+    console.log("[worker] sync-all result:", res);
+    return;
+  }
+
   // Immediate run on start (optional)
   if (process.env.WORKER_RUN_ON_START !== "0") {
     try {
