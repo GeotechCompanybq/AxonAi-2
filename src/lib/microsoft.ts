@@ -2,6 +2,7 @@ import type { NextRequest } from "next/server";
 import { cookies } from "next/headers";
 import { getDb, getCollectionNames } from "@/lib/mongo";
 import { getAdminAuth, getAdminDb } from "@/lib/firebase-admin";
+import crypto from "crypto";
 
 export type MicrosoftTokenSet = {
   accessToken: string;
@@ -17,6 +18,20 @@ function looksLikeGuid(value: string): boolean {
   return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
     value.trim()
   );
+}
+
+// PKCE helper functions
+function generateCodeVerifier(): string {
+  return crypto
+    .randomBytes(32)
+    .toString("base64url");
+}
+
+function generateCodeChallenge(verifier: string): string {
+  return crypto
+    .createHash("sha256")
+    .update(verifier)
+    .digest("base64url");
 }
 
 export function getMicrosoftClientSecret(): string {
@@ -58,11 +73,15 @@ export function buildMicrosoftAuthorizeUrl({
 }: {
   req: NextRequest;
   state: string;
-}): string {
+}): { url: string; codeVerifier: string } {
   const clientId = process.env.MICROSOFT_CLIENT_ID || "";
   const tenant = getMicrosoftTenantId();
   const redirectUri = getMicrosoftRedirectUri({ req });
   const scope = getMicrosoftScopes();
+
+  // Generate PKCE parameters
+  const codeVerifier = generateCodeVerifier();
+  const codeChallenge = generateCodeChallenge(codeVerifier);
 
   const url = new URL(
     `https://login.microsoftonline.com/${encodeURIComponent(
@@ -77,15 +96,21 @@ export function buildMicrosoftAuthorizeUrl({
   url.searchParams.set("state", state);
   // Force prompt on first connect so we reliably get a refresh token
   url.searchParams.set("prompt", "consent");
-  return url.toString();
+  // Add PKCE parameters
+  url.searchParams.set("code_challenge", codeChallenge);
+  url.searchParams.set("code_challenge_method", "S256");
+
+  return { url: url.toString(), codeVerifier };
 }
 
 export async function exchangeMicrosoftCodeForTokens({
   req,
   code,
+  codeVerifier,
 }: {
   req: NextRequest;
   code: string;
+  codeVerifier: string;
 }): Promise<MicrosoftTokenSet> {
   const tenant = getMicrosoftTenantId();
   const clientId = process.env.MICROSOFT_CLIENT_ID!;
@@ -98,6 +123,8 @@ export async function exchangeMicrosoftCodeForTokens({
   params.set("code", code);
   params.set("redirect_uri", redirectUri);
   params.set("grant_type", "authorization_code");
+  // Add PKCE code_verifier
+  params.set("code_verifier", codeVerifier);
 
   const tokenRes = await fetch(
     `https://login.microsoftonline.com/${encodeURIComponent(
