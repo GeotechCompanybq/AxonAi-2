@@ -680,10 +680,26 @@ export default function TimesheetsPage() {
       if (!res.ok) throw new Error(json?.error || "Failed to post meetings");
       const createdCount = Number(json?.createdCount || 0);
       const errorCount = Number(json?.errorCount || 0);
-      setMeetingStatus(
-        `Posted ${createdCount} meeting${createdCount === 1 ? "" : "s"} to Harvest` +
-          (errorCount ? ` (${errorCount} failed).` : ".")
-      );
+      
+      // Build detailed message with user and account info
+      let message = `Posted ${createdCount} meeting${createdCount === 1 ? "" : "s"} to Harvest`;
+      if (json?.harvestUser?.name) {
+        message += ` as ${json.harvestUser.name}`;
+      }
+      if (json?.harvestAccountId) {
+        message += ` (Account: ${json.harvestAccountId})`;
+      }
+      if (errorCount) {
+        message += ` (${errorCount} failed)`;
+      }
+      
+      // Log created entries for debugging
+      if (json?.created?.length > 0) {
+        console.log('[Harvest] Created entries:', json.created);
+        message += `\n\nView in Harvest: Check your timesheet for dates ${fromDate} to ${toDate}`;
+      }
+      
+      setMeetingStatus(message);
       await fetchEntries(true);
       if (!errorCount) setMeetingPreview(null);
     } catch (e: any) {

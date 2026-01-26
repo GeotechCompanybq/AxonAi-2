@@ -5,7 +5,6 @@ import { useRouter } from "next/navigation";
 import { useAuth } from "@/hooks/use-auth";
 import { AppHeader } from "@/components/layout/app-header";
 import { AppSidebar } from "@/components/layout/app-sidebar";
-import { SidebarProvider, SidebarInset } from "@/components/ui/sidebar";
 import { IconSpinner } from "@/components/icons";
 import { MobileTabBar } from "@/components/layout/mobile-tabbar";
 import { AIActionButton } from "@/components/layout/ai-action-button";
@@ -32,9 +31,14 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   }
 
   return (
-    <SidebarProvider defaultOpen={false}>
-      <AppSidebar />
-      <SidebarInset className="flex flex-col min-h-screen ai-grid-bg">
+    <div className="flex min-h-screen ai-grid-bg">
+      {/* Always visible sidebar on desktop */}
+      <aside className="hidden md:flex w-64 flex-shrink-0">
+        <AppSidebar />
+      </aside>
+      
+      {/* Main content area */}
+      <div className="flex flex-col flex-1 min-w-0">
         <AppHeader />
         {/* Expose uid globally for API routes that need uid query param */}
         <script
@@ -45,11 +49,12 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
         <main className="flex-1 p-4 md:p-8 overflow-auto pb-28 md:pb-8">
           {children}
         </main>
-        {/* Mobile-only nav and AI action */}
-        <AIActionButton />
-        <MobileTabBar />
-        <FloatingChatBot />
-      </SidebarInset>
-    </SidebarProvider>
+      </div>
+      
+      {/* Mobile-only nav and AI action */}
+      <AIActionButton />
+      <MobileTabBar />
+      <FloatingChatBot />
+    </div>
   );
 }

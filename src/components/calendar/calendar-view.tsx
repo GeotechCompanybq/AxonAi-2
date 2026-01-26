@@ -125,17 +125,24 @@ export function CalendarView() {
   const calendarModifiers = useMemo(() => {
     const modifiers: Record<string, Date[]> = {
       important: [],
+      meeting: [],
     };
     importantDates.forEach(impDate => {
        if (impDate.date && isValid(parseISO(impDate.date))) {
         modifiers.important.push(startOfDay(parseISO(impDate.date)));
        }
     });
+    microsoftEvents.forEach(event => {
+      if (event.start?.dateTime && isValid(new Date(event.start.dateTime))) {
+        modifiers.meeting.push(startOfDay(new Date(event.start.dateTime)));
+      }
+    });
     return modifiers;
-  }, [importantDates]);
+  }, [importantDates, microsoftEvents]);
 
   const calendarModifierStyles = {
-    important: { borderColor: 'hsl(var(--accent))', borderWidth: '2px', borderRadius: 'var(--radius)' }
+    important: { borderColor: 'hsl(var(--accent))', borderWidth: '2px', borderRadius: 'var(--radius)' },
+    meeting: { backgroundColor: 'hsl(var(--primary) / 0.1)', fontWeight: '600' }
   };
 
   const handleAddImportantDate = () => {
@@ -230,6 +237,7 @@ export function CalendarView() {
             footer={
               <div className="flex flex-wrap justify-center gap-x-3 gap-y-1 text-xs p-2 border-t">
                 <div className="flex items-center"><span className="h-3 w-3 rounded-md border-2 mr-1.5" style={{borderColor: calendarModifierStyles.important.borderColor}}></span> Important Date</div>
+                <div className="flex items-center"><span className="h-3 w-3 rounded-md mr-1.5" style={{backgroundColor: 'hsl(var(--primary) / 0.3)'}}></span> Microsoft Events</div>
               </div>
             }
           />
@@ -238,28 +246,96 @@ export function CalendarView() {
 
       <Card className="shadow-lg h-fit">
         <CardHeader>
-          <CardTitle className="flex items-center">
-            <CalendarDays className="h-6 w-6 mr-2 text-primary" />
-            Events for {currentCalendarDate ? format(currentCalendarDate, 'PPP') : 'Selected Day'}
+          <CardTitle className="flex items-center justify-between">
+            <div className="flex items-center">
+              <CalendarDays className="h-6 w-6 mr-2 text-primary" />
+              Events for {currentCalendarDate ? format(currentCalendarDate, 'PPP') : 'Selected Day'}
+            </div>
+            {isLoadingEvents && (
+              <div className="text-xs text-muted-foreground">Loading...</div>
+            )}
           </CardTitle>
         </CardHeader>
         <CardContent>
-          {selectedDayItems.length > 0 ? (
+          {(selectedDayImportantDates.length > 0 || selectedDayMicrosoftEvents.length > 0) ? (
             <ScrollArea className="h-[calc(100vh-20rem)] max-h-[450px] pr-3">
-              <ul className="space-y-3">
-                {selectedDayItems.map(item => (
-                  <li key={item.id} className="p-3 bg-muted/50 rounded-md shadow-sm">
-                    <div className="flex items-center">
-                      <Star className="h-4 w-4 mr-2 text-accent" />
-                      <span className="font-medium text-sm text-accent-foreground">{item.description}</span>
-                    </div>
-                  </li>
-                ))}
-              </ul>
+              <div className="space-y-4">
+                {/* Microsoft Events */}
+                {selectedDayMicrosoftEvents.length > 0 && (
+                  <div>
+                    <h4 className="text-xs font-semibold text-muted-foreground mb-2 uppercase">Microsoft Calendar</h4>
+                    <ul className="space-y-2">
+                      {selectedDayMicrosoftEvents.map(event => {
+                        const startTime = event.start?.dateTime ? format(new Date(event.start.dateTime), 'p') : '';
+                        const endTime = event.end?.dateTime ? format(new Date(event.end.dateTime), 'p') : '';
+                        return (
+                          <li key={event.id} className="p-3 bg-primary/5 rounded-md shadow-sm border border-primary/10">
+                            <div className="space-y-1.5">
+                              <div className="flex items-start justify-between gap-2">
+                                <span className="font-medium text-sm">{event.subject || 'Untitled Meeting'}</span>
+                                {event.isOnlineMeeting && (
+                                  <Badge variant="secondary" className="text-xs shrink-0">
+                                    <Video className="h-3 w-3 mr-1" />
+                                    Teams
+                                  </Badge>
+                                )}
+                              </div>
+                              <div className="text-xs text-muted-foreground space-y-0.5">
+                                {!event.isAllDay && (
+                                  <div>🕒 {startTime} - {endTime}</div>
+                                )}
+                                {event.location && (
+                                  <div className="flex items-center gap-1">
+                                    <MapPin className="h-3 w-3" />
+                                    {event.location}
+                                  </div>
+                                )}
+                                {event.attendeesCount > 0 && (
+                                  <div className="flex items-center gap-1">
+                                    <Users className="h-3 w-3" />
+                                    {event.attendeesCount} attendee{event.attendeesCount !== 1 ? 's' : ''}
+                                  </div>
+                                )}
+                              </div>
+                              {event.onlineMeetingUrl && (
+                                <a 
+                                  href={event.onlineMeetingUrl} 
+                                  target="_blank" 
+                                  rel="noopener noreferrer"
+                                  className="inline-flex items-center text-xs text-primary hover:underline mt-1"
+                                >
+                                  Join Meeting →
+                                </a>
+                              )}
+                            </div>
+                          </li>
+                        );
+                      })}
+                    </ul>
+                  </div>
+                )}
+
+                {/* Important Dates */}
+                {selectedDayImportantDates.length > 0 && (
+                  <div>
+                    <h4 className="text-xs font-semibold text-muted-foreground mb-2 uppercase">Important Dates</h4>
+                    <ul className="space-y-2">
+                      {selectedDayImportantDates.map(item => (
+                        <li key={item.id} className="p-3 bg-muted/50 rounded-md shadow-sm">
+                          <div className="flex items-center">
+                            <Star className="h-4 w-4 mr-2 text-accent" />
+                            <span className="font-medium text-sm text-accent-foreground">{item.description}</span>
+                          </div>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+              </div>
             </ScrollArea>
           ) : (
             <p className="text-sm text-muted-foreground text-center py-4">
-              {currentCalendarDate ? "No important dates for this day." : "Select a day to see important dates."}
+              {currentCalendarDate ? "No events for this day." : "Select a day to see events."}
             </p>
           )}
         </CardContent>

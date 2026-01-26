@@ -330,6 +330,28 @@ export async function POST(req: NextRequest) {
         { status: harvestAuth.status }
       );
 
+    // Verify Harvest user identity
+    let harvestUser: any = null;
+    try {
+      const userRes = await fetch("https://api.harvestapp.com/v2/users/me", {
+        headers: {
+          Authorization: `Bearer ${harvestAuth.token}`,
+          "Harvest-Account-Id": harvestAuth.accountId,
+          "User-Agent": process.env.HARVEST_USER_AGENT || "AxonAI (support@geotechcompany.us)",
+        },
+      });
+      if (userRes.ok) {
+        harvestUser = await userRes.json();
+        console.log('[Harvest] Posting as user:', {
+          name: harvestUser?.first_name + ' ' + harvestUser?.last_name,
+          email: harvestUser?.email,
+          accountId: harvestAuth.accountId,
+        });
+      }
+    } catch (e) {
+      console.error('[Harvest] Failed to fetch user info:', e);
+    }
+
     const existing = await fetchHarvestEntries({
       token: harvestAuth.token,
       accountId: harvestAuth.accountId,
@@ -428,6 +450,15 @@ export async function POST(req: NextRequest) {
             JSON.stringify(json);
           throw new Error(msg);
         }
+        // Log successful creation for debugging
+        console.log('[Harvest] Created entry:', {
+          id: json?.id,
+          project: json?.project?.name,
+          task: json?.task?.name,
+          hours: json?.hours,
+          spent_date: json?.spent_date,
+          notes: json?.notes?.substring(0, 50),
+        });
         created.push(json);
       } catch (e: any) {
         errors.push({
@@ -445,6 +476,20 @@ export async function POST(req: NextRequest) {
       createdCount: created.length,
       errorCount: errors.length,
       errors,
+      created: created.map(entry => ({
+        id: entry?.id,
+        project: entry?.project?.name,
+        task: entry?.task?.name,
+        hours: entry?.hours,
+        spent_date: entry?.spent_date,
+        notes: entry?.notes,
+        harvest_url: `https://app.harvestapp.com/time/entries/${entry?.id}`,
+      })),
+      harvestAccountId: harvestAuth.accountId,
+      harvestUser: harvestUser ? {
+        name: `${harvestUser.first_name} ${harvestUser.last_name}`,
+        email: harvestUser.email,
+      } : null,
     });
   } catch (e) {
     const message = e instanceof Error ? e.message : "Failed to post meetings";
