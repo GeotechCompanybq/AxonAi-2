@@ -28,6 +28,7 @@ export function NeededHours() {
   const [entries, setEntries] = useState<TimeEntry[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [isConnected, setIsConnected] = useState<boolean | null>(null);
   const [targetPerDay, setTargetPerDay] = useState<string>("8");
   const [note, setNote] = useState<string>("");
   const [noting, setNoting] = useState(false);
@@ -36,6 +37,26 @@ export function NeededHours() {
     setIsLoading(true);
     setError(null);
     try {
+      // Get uid from global window variable (set by layout)
+      const uid = (window as any).__AXON_UID__;
+      
+      // Check Harvest connection status first
+      const statusUrl = new URL("/api/harvest/status", window.location.origin);
+      if (uid) {
+        statusUrl.searchParams.set("uid", uid);
+      }
+      const statusRes = await fetch(statusUrl.toString(), { cache: "no-store" });
+      const statusJson = await statusRes.json();
+      const connected = statusJson?.connected === true;
+      setIsConnected(connected);
+      
+      if (!connected) {
+        setError("Not connected to Harvest");
+        setIsLoading(false);
+        return;
+      }
+      
+      // Fetch timesheets
       const url = new URL("/api/harvest/timesheets", window.location.origin);
       const today = new Date();
       const start = startOfWeek(today);
@@ -44,15 +65,23 @@ export function NeededHours() {
       url.searchParams.set("from", start.toISOString().slice(0, 10));
       url.searchParams.set("to", end.toISOString().slice(0, 10));
       url.searchParams.set("per_page", "100");
+      if (uid) {
+        url.searchParams.set("uid", uid);
+      }
       const res = await fetch(url.toString(), { cache: "no-store" });
       const json = await res.json();
-      if (!res.ok) throw new Error(json?.error || "Failed to load timesheets");
+      if (!res.ok) {
+        throw new Error(json?.error || "Failed to load timesheets");
+      }
       const list: TimeEntry[] = Array.isArray(json?.timeEntries)
         ? json.timeEntries
         : [];
       setEntries(list);
+      setError(null);
     } catch (e: any) {
-      setError(e?.message || "Failed to load timesheets");
+      const errorMsg = e?.message || "Failed to load timesheets";
+      setError(errorMsg);
+      setIsConnected(false);
     } finally {
       setIsLoading(false);
     }
@@ -159,7 +188,13 @@ Return ONLY the sentence (no JSON, no quotes).`;
           </div>
           <div>
             <div className="text-muted-foreground">Worked</div>
-            <div className="font-medium">{summary.worked} h</div>
+            <div className="font-medium">
+              {isConnected === false ? (
+                <span className="text-red-600 text-xs">Not connected</span>
+              ) : (
+                `${summary.worked} h`
+              )}
+            </div>
           </div>
           <div>
             <div className="text-muted-foreground">Remaining</div>

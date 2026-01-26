@@ -35,6 +35,8 @@ export function CalendarView() {
   const [importantDates, setImportantDates] = useState<ImportantDate[]>([]);
   const [microsoftEvents, setMicrosoftEvents] = useState<MicrosoftEvent[]>([]);
   const [isLoadingEvents, setIsLoadingEvents] = useState(false);
+  const [microsoftConnected, setMicrosoftConnected] = useState<boolean | null>(null);
+  const [microsoftError, setMicrosoftError] = useState<string | null>(null);
   const [isMounted, setIsMounted] = useState(false);
   const [isImportantDateModalOpen, setIsImportantDateModalOpen] = useState(false);
   const [newImportantDateDesc, setNewImportantDateDesc] = useState('');
@@ -55,9 +57,11 @@ export function CalendarView() {
 
     const fetchMicrosoftEvents = async () => {
       setIsLoadingEvents(true);
+      setMicrosoftError(null);
       try {
-        // Fetch events for next 30 days
+        // Fetch events for past 7 days to next 30 days (to show today's events)
         const start = new Date();
+        start.setDate(start.getDate() - 7);
         const end = new Date();
         end.setDate(end.getDate() + 30);
         
@@ -65,14 +69,31 @@ export function CalendarView() {
         url.searchParams.set('start', start.toISOString());
         url.searchParams.set('end', end.toISOString());
         url.searchParams.set('tz', Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC');
+        url.searchParams.set('uid', user.uid);
 
         const res = await fetch(url.toString());
         const data = await res.json();
 
         if (res.ok && data.events) {
-          setMicrosoftEvents(data.events);
+          setMicrosoftEvents(Array.isArray(data.events) ? data.events : []);
+          setMicrosoftConnected(true);
+          setMicrosoftError(null);
+          console.log(`Loaded ${data.events?.length || 0} Microsoft calendar events`);
+        } else {
+          const errorMsg = data?.error || 'Failed to fetch calendar events';
+          if (errorMsg.toLowerCase().includes('not connected')) {
+            setMicrosoftConnected(false);
+            setMicrosoftError('Not connected to Microsoft');
+          } else {
+            setMicrosoftError(errorMsg);
+            setMicrosoftConnected(false);
+          }
+          console.error('Failed to fetch Microsoft calendar events:', errorMsg);
         }
       } catch (error) {
+        const errorMsg = error instanceof Error ? error.message : 'Failed to fetch calendar events';
+        setMicrosoftError(errorMsg);
+        setMicrosoftConnected(false);
         console.error('Failed to fetch Microsoft calendar events:', error);
       } finally {
         setIsLoadingEvents(false);
@@ -257,6 +278,11 @@ export function CalendarView() {
           </CardTitle>
         </CardHeader>
         <CardContent>
+          {microsoftError && (
+            <div className="mb-3 p-2 rounded-md bg-yellow-500/10 border border-yellow-500/20 text-xs text-yellow-600">
+              {microsoftError}
+            </div>
+          )}
           {(selectedDayImportantDates.length > 0 || selectedDayMicrosoftEvents.length > 0) ? (
             <ScrollArea className="h-[calc(100vh-20rem)] max-h-[450px] pr-3">
               <div className="space-y-4">
