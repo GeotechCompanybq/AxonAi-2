@@ -14,7 +14,7 @@ export const maxDuration = 300; // 5 minutes (platform max)
  * Usage with cron-job.org:
  * - URL: https://axonai.onrender.com/api/cron/sync
  * - Method: GET or POST
- * - Schedule: */15 * * * * (every 15 minutes)
+ * - Schedule: every 15 minutes (cron: asterisk-slash-15 asterisk asterisk asterisk asterisk)
  * 
  * Query parameters:
  * - dry: Set to "1" for health check without running syncs
