@@ -8,28 +8,79 @@ import type { ImportantDate } from '@/types';
 import { getImportantDatesFromLocalStorage, saveImportantDatesToLocalStorage } from '@/lib/important-date-storage';
 import { format, parseISO, isValid, startOfDay } from 'date-fns';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { CalendarDays, Star, PlusCircle } from 'lucide-react';
+import { CalendarDays, Star, PlusCircle, Video, MapPin, Users } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter, DialogTrigger } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useToast } from '@/hooks/use-toast';
+import { useAuth } from '@/hooks/use-auth';
+import { Badge } from '@/components/ui/badge';
+
+type MicrosoftEvent = {
+  id: string;
+  subject: string | null;
+  start: { dateTime: string; timeZone: string } | null;
+  end: { dateTime: string; timeZone: string } | null;
+  isAllDay: boolean;
+  isOnlineMeeting: boolean;
+  onlineMeetingUrl: string | null;
+  location: string | null;
+  organizer: string | null;
+  attendeesCount: number;
+};
 
 export function CalendarView() {
   const [currentCalendarDate, setCurrentCalendarDate] = useState<Date | undefined>(new Date());
   const [importantDates, setImportantDates] = useState<ImportantDate[]>([]);
+  const [microsoftEvents, setMicrosoftEvents] = useState<MicrosoftEvent[]>([]);
+  const [isLoadingEvents, setIsLoadingEvents] = useState(false);
   const [isMounted, setIsMounted] = useState(false);
   const [isImportantDateModalOpen, setIsImportantDateModalOpen] = useState(false);
   const [newImportantDateDesc, setNewImportantDateDesc] = useState('');
   const [newImportantDateDate, setNewImportantDateDate] = useState<Date | undefined>(new Date());
 
   const { toast } = useToast();
+  const { user } = useAuth();
 
   useEffect(() => {
     setIsMounted(true);
     const loadedImportantDates = getImportantDatesFromLocalStorage();
     setImportantDates(loadedImportantDates);
   }, []);
+
+  // Fetch Microsoft Calendar events
+  useEffect(() => {
+    if (!user?.uid) return;
+
+    const fetchMicrosoftEvents = async () => {
+      setIsLoadingEvents(true);
+      try {
+        // Fetch events for next 30 days
+        const start = new Date();
+        const end = new Date();
+        end.setDate(end.getDate() + 30);
+        
+        const url = new URL('/api/microsoft/calendar', window.location.origin);
+        url.searchParams.set('start', start.toISOString());
+        url.searchParams.set('end', end.toISOString());
+        url.searchParams.set('tz', Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC');
+
+        const res = await fetch(url.toString());
+        const data = await res.json();
+
+        if (res.ok && data.events) {
+          setMicrosoftEvents(data.events);
+        }
+      } catch (error) {
+        console.error('Failed to fetch Microsoft calendar events:', error);
+      } finally {
+        setIsLoadingEvents(false);
+      }
+    };
+
+    fetchMicrosoftEvents();
+  }, [user]);
 
   const importantDatesByDay = useMemo(() => {
     const map = new Map<string, ImportantDate[]>();
@@ -45,11 +96,31 @@ export function CalendarView() {
     return map;
   }, [importantDates]);
 
-  const selectedDayItems: ImportantDate[] = useMemo(() => {
+  const microsoftEventsByDay = useMemo(() => {
+    const map = new Map<string, MicrosoftEvent[]>();
+    microsoftEvents.forEach(event => {
+      if (event.start?.dateTime && isValid(new Date(event.start.dateTime))) {
+        const dayStr = format(new Date(event.start.dateTime), 'yyyy-MM-dd');
+        if (!map.has(dayStr)) {
+          map.set(dayStr, []);
+        }
+        map.get(dayStr)?.push(event);
+      }
+    });
+    return map;
+  }, [microsoftEvents]);
+
+  const selectedDayImportantDates: ImportantDate[] = useMemo(() => {
     if (!currentCalendarDate) return [];
     const dayStr = format(currentCalendarDate, 'yyyy-MM-dd');
     return importantDatesByDay.get(dayStr) || [];
   }, [currentCalendarDate, importantDatesByDay]);
+
+  const selectedDayMicrosoftEvents: MicrosoftEvent[] = useMemo(() => {
+    if (!currentCalendarDate) return [];
+    const dayStr = format(currentCalendarDate, 'yyyy-MM-dd');
+    return microsoftEventsByDay.get(dayStr) || [];
+  }, [currentCalendarDate, microsoftEventsByDay]);
 
   const calendarModifiers = useMemo(() => {
     const modifiers: Record<string, Date[]> = {

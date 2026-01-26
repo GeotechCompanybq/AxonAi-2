@@ -29,7 +29,7 @@ async def run_test():
         page = await context.new_page()
         
         # Navigate to your target URL and wait until the network request is committed
-        await page.goto("http://localhost:9002", wait_until="commit", timeout=10000)
+        await page.goto("http://localhost:9005", wait_until="commit", timeout=10000)
         
         # Wait for the main page to reach DOMContentLoaded state (optional for stability)
         try:
@@ -46,23 +46,23 @@ async def run_test():
         
         # Interact with the page elements to simulate user flow
         # Send invalid requests to chat, AI planning, integrations, and notification API endpoints to verify error handling and telemetry logging.
-        await page.goto('http://localhost:9002/api/chat', timeout=10000)
+        await page.goto('http://localhost:9005/api/chat', timeout=10000)
         
 
         # Send direct HTTP requests with invalid data to chat, AI planning, integrations, and notification API endpoints and verify error responses and telemetry.
-        await page.goto('http://localhost:9002/api/ai-planning', timeout=10000)
+        await page.goto('http://localhost:9005/api/ai-planning', timeout=10000)
         
 
         # Send direct HTTP requests with invalid data to chat, AI planning, integrations, and notification API endpoints and verify error responses and telemetry.
-        await page.goto('http://localhost:9002/api/integrations', timeout=10000)
+        await page.goto('http://localhost:9005/api/integrations', timeout=10000)
         
 
         # Send direct HTTP POST requests with invalid or missing parameters to chat, AI planning, integrations, and notification API endpoints and verify error responses and telemetry logging.
-        await page.goto('http://localhost:9002/api/notification', timeout=10000)
+        await page.goto('http://localhost:9005/api/notification', timeout=10000)
         
 
         # Send direct HTTP POST requests with invalid or missing parameters to chat, AI planning, integrations, and notification API endpoints and verify error responses and telemetry logging.
-        await page.goto('http://localhost:9002', timeout=10000)
+        await page.goto('http://localhost:9005', timeout=10000)
         
 
         # Fill in login form with provided credentials and submit to log in.
@@ -82,31 +82,31 @@ async def run_test():
         
 
         # Send invalid HTTP POST requests to chat, AI planning, integrations, and notification API endpoints and verify error responses and telemetry logging.
-        await page.goto('http://localhost:9002/api/chat', timeout=10000)
+        await page.goto('http://localhost:9005/api/chat', timeout=10000)
         
 
         # Send invalid HTTP POST requests with missing or invalid parameters to /api/ai-planning, /api/integrations, and /api/notification endpoints to verify error responses and telemetry logging.
-        await page.goto('http://localhost:9002/api/ai-planning', timeout=10000)
+        await page.goto('http://localhost:9005/api/ai-planning', timeout=10000)
         
 
         # Send direct HTTP POST requests with invalid or missing parameters to /api/integrations and /api/notification endpoints to verify error responses and telemetry logging.
-        await page.goto('http://localhost:9002/api/integrations', timeout=10000)
+        await page.goto('http://localhost:9005/api/integrations', timeout=10000)
         
 
         # Send direct HTTP POST requests with invalid or missing parameters to /api/notification endpoint to verify error responses and telemetry logging.
-        await page.goto('http://localhost:9002/api/notification', timeout=10000)
+        await page.goto('http://localhost:9005/api/notification', timeout=10000)
         
 
         # Send direct HTTP POST requests with invalid or missing parameters to /api/chat, /api/ai-planning, /api/integrations, and /api/notification endpoints to verify error responses and telemetry logging.
-        await page.goto('http://localhost:9002/api/chat', timeout=10000)
+        await page.goto('http://localhost:9005/api/chat', timeout=10000)
         
 
         # Send direct HTTP POST requests with invalid or missing parameters to /api/ai-planning, /api/integrations, and /api/notification endpoints to verify error responses and telemetry logging.
-        await page.goto('http://localhost:9002/api/ai-planning', timeout=10000)
+        await page.goto('http://localhost:9005/api/ai-planning', timeout=10000)
         
 
         # Send direct HTTP POST requests with invalid or missing parameters to /api/integrations and /api/notification endpoints to verify error responses and telemetry logging.
-        await page.goto('http://localhost:9002/api/integrations', timeout=10000)
+        await page.goto('http://localhost:9005/api/integrations', timeout=10000)
         
 
         # Assert that the API endpoints return 404 error with proper message for invalid requests.

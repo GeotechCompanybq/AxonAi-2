@@ -60,7 +60,7 @@ To get a local copy up and running, follow these simple steps.
     ```sh
     npm run dev
     ```
-    This will start the Next.js app (usually on `http://localhost:9002`) and the Genkit development server.
+    This will start the Next.js app (usually on `http://localhost:9005`) and the Genkit development server.
 
 ## 🗓️ Microsoft / Teams Calendar (Signed-in user)
 

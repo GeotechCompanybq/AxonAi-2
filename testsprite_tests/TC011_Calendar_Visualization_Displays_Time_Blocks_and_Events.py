@@ -29,7 +29,7 @@ async def run_test():
         page = await context.new_page()
         
         # Navigate to your target URL and wait until the network request is committed
-        await page.goto("http://localhost:9002", wait_until="commit", timeout=10000)
+        await page.goto("http://localhost:9005", wait_until="commit", timeout=10000)
         
         # Wait for the main page to reach DOMContentLoaded state (optional for stability)
         try:
@@ -50,7 +50,7 @@ async def run_test():
         
 
         # Try to find any clickable element or menu to load the calendar view or try to reload the page.
-        await page.goto('http://localhost:9002/', timeout=10000)
+        await page.goto('http://localhost:9005/', timeout=10000)
         
 
         # Input email and password, then click 'Log In with Email' button to log in and access calendar view.
@@ -80,21 +80,21 @@ async def run_test():
         
 
         # Test UI responsiveness by simulating a mobile screen size to verify the calendar layout adapts correctly without UI breakage.
-        await page.goto('http://localhost:9002/calendar', timeout=10000)
+        await page.goto('http://localhost:9005/calendar', timeout=10000)
         
 
         await page.mouse.wheel(0, window.innerHeight)
         
 
         # Verify UI responsiveness by simulating a mobile screen size and checking that the calendar layout adapts correctly without UI breakage.
-        await page.goto('http://localhost:9002/calendar', timeout=10000)
+        await page.goto('http://localhost:9005/calendar', timeout=10000)
         
 
         await page.mouse.wheel(0, window.innerHeight)
         
 
         # Simulate a mobile screen size viewport and verify the calendar layout adapts correctly without UI breakage or loss of functionality.
-        await page.goto('http://localhost:9002/calendar', timeout=10000)
+        await page.goto('http://localhost:9005/calendar', timeout=10000)
         
 
         await page.mouse.wheel(0, window.innerHeight)
@@ -107,7 +107,7 @@ async def run_test():
         
 
         # Simulate a mobile screen size viewport and verify the calendar layout adapts correctly without UI breakage or loss of functionality.
-        await page.goto('http://localhost:9002/calendar', timeout=10000)
+        await page.goto('http://localhost:9005/calendar', timeout=10000)
         
 
         await page.mouse.wheel(0, window.innerHeight)

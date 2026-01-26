@@ -29,7 +29,7 @@ async def run_test():
         page = await context.new_page()
         
         # Navigate to your target URL and wait until the network request is committed
-        await page.goto("http://localhost:9002", wait_until="commit", timeout=10000)
+        await page.goto("http://localhost:9005", wait_until="commit", timeout=10000)
         
         # Wait for the main page to reach DOMContentLoaded state (optional for stability)
         try:
@@ -53,7 +53,7 @@ async def run_test():
         
 
         # Try to reload the page or check if there is a login or entry point to access the main UI pages.
-        await page.goto('http://localhost:9002/', timeout=10000)
+        await page.goto('http://localhost:9005/', timeout=10000)
         
 
         # Input email and password, then click 'Log In with Email' button to log in.
@@ -125,7 +125,7 @@ async def run_test():
         
 
         # Resize the browser window to various mobile viewport sizes and verify the UI layout adapts correctly without content overlap or cutoff.
-        await page.goto('http://localhost:9002/schedule/create', timeout=10000)
+        await page.goto('http://localhost:9005/schedule/create', timeout=10000)
         
 
         # Assert keyboard navigation: check that all interactive elements are focusable and in correct order

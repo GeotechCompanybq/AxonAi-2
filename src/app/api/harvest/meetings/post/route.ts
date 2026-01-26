@@ -9,6 +9,7 @@ import {
   type MicrosoftTokenSet,
 } from "@/lib/microsoft";
 import { getDb, getCollectionNames } from "@/lib/mongo";
+import crypto from "crypto";
 
 export const runtime = "nodejs";
 
@@ -58,6 +59,11 @@ function clampNotes(s: string, max = 255): string {
   const v = String(s || "").trim();
   if (!v) return "";
   return v.length > max ? v.slice(0, max - 1) + "…" : v;
+}
+
+// Create a short hash of Microsoft event ID for compact storage
+function shortHash(id: string): string {
+  return crypto.createHash("sha256").update(id).digest("hex").slice(0, 12);
 }
 
 function isExpired({ tokens }: { tokens: MicrosoftTokenSet }): boolean {
@@ -342,7 +348,9 @@ export async function POST(req: NextRequest) {
     for (const e of events) {
       const id = String(e?.id || "").trim();
       if (!id) continue;
-      if (existingMarkers.has(id)) continue;
+      const hash = shortHash(id);
+      // Check both full ID (legacy) and short hash
+      if (existingMarkers.has(id) || existingMarkers.has(hash)) continue;
       const subject = String(e?.subject || "Meeting").trim() || "Meeting";
       const isAllDay = Boolean(e?.isAllDay);
       if (isAllDay) continue;
@@ -361,7 +369,8 @@ export async function POST(req: NextRequest) {
       // Guard: keep in requested date list
       if (!dateList.includes(spent_date)) continue;
 
-      const notes = clampNotes(`[MS:${id}] ${subject}`);
+      // Use short hash for compact, readable notes
+      const notes = clampNotes(`${subject} [MS:${hash}]`);
       drafts.push({
         microsoftEventId: id,
         subject,

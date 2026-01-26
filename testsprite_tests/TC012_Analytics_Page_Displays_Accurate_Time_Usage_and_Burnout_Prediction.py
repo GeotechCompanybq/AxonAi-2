@@ -29,7 +29,7 @@ async def run_test():
         page = await context.new_page()
         
         # Navigate to your target URL and wait until the network request is committed
-        await page.goto("http://localhost:9002", wait_until="commit", timeout=10000)
+        await page.goto("http://localhost:9005", wait_until="commit", timeout=10000)
         
         # Wait for the main page to reach DOMContentLoaded state (optional for stability)
         try:
@@ -46,7 +46,7 @@ async def run_test():
         
         # Interact with the page elements to simulate user flow
         # Try to reload the page or check for any alternative navigation options.
-        await page.goto('http://localhost:9002/', timeout=10000)
+        await page.goto('http://localhost:9005/', timeout=10000)
         
 
         # Input the provided email and password, then click the 'Log In with Email' button to authenticate.

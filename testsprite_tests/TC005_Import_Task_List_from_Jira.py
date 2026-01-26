@@ -29,7 +29,7 @@ async def run_test():
         page = await context.new_page()
         
         # Navigate to your target URL and wait until the network request is committed
-        await page.goto("http://localhost:9002", wait_until="commit", timeout=10000)
+        await page.goto("http://localhost:9005", wait_until="commit", timeout=10000)
         
         # Wait for the main page to reach DOMContentLoaded state (optional for stability)
         try:
@@ -50,7 +50,7 @@ async def run_test():
         
 
         # Try to reload the page or navigate to a different URL or section that might contain Jira integration or task import options.
-        await page.goto('http://localhost:9002/', timeout=10000)
+        await page.goto('http://localhost:9005/', timeout=10000)
         
 
         # Click on the button that might lead to Jira integration or task import, likely the 'Open issues overlay' button to check for Jira tasks or integration settings.

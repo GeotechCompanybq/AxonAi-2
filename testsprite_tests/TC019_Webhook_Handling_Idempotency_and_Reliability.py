@@ -29,7 +29,7 @@ async def run_test():
         page = await context.new_page()
         
         # Navigate to your target URL and wait until the network request is committed
-        await page.goto("http://localhost:9002", wait_until="commit", timeout=10000)
+        await page.goto("http://localhost:9005", wait_until="commit", timeout=10000)
         
         # Wait for the main page to reach DOMContentLoaded state (optional for stability)
         try:
@@ -46,15 +46,15 @@ async def run_test():
         
         # Interact with the page elements to simulate user flow
         # Send valid webhook payloads to the monday.com and Jira webhook endpoints.
-        await page.goto('http://localhost:9002/api/webhooks/mondaycom', timeout=10000)
+        await page.goto('http://localhost:9005/api/webhooks/mondaycom', timeout=10000)
         
 
         # Locate the correct webhook endpoint URLs for monday.com and Jira integrations.
-        await page.goto('http://localhost:9002/api/webhooks', timeout=10000)
+        await page.goto('http://localhost:9005/api/webhooks', timeout=10000)
         
 
         # Check the application dashboard or main page for any links or documentation about webhook endpoints or integration settings.
-        await page.goto('http://localhost:9002', timeout=10000)
+        await page.goto('http://localhost:9005', timeout=10000)
         
 
         # Input email and password, then submit the login form.
