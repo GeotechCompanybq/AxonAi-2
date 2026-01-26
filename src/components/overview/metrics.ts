@@ -46,9 +46,15 @@ async function fetchHarvestHoursByDay({
   from: string;
   to: string;
 }): Promise<Record<string, number>> {
+  // Get uid from global window variable (set by layout)
+  const uid = (window as any).__AXON_UID__;
+  
   const url = new URL("/api/harvest/timesheets", window.location.origin);
   url.searchParams.set("from", from);
   url.searchParams.set("to", to);
+  if (uid) {
+    url.searchParams.set("uid", uid);
+  }
   const res = await fetch(url.toString(), { cache: "no-store" });
   const json = await res.json();
   if (!res.ok) throw new Error(json?.error || "Failed to fetch Harvest timesheets");
@@ -97,18 +103,37 @@ export async function buildOverviewKpis(range: DateRange | undefined) {
   let hoursPrev = 0;
   let hoursByDay: Record<string, number> = {};
   let hoursPrevByDay: Record<string, number> = {};
-  let harvestConnected = true;
+  let harvestConnected = false;
 
+  // Check Harvest connection status first
   try {
-    hoursByDay = await fetchHarvestHoursByDay({ from: fmtYmd(r.from), to: fmtYmd(r.to) });
-    hoursPrevByDay = await fetchHarvestHoursByDay({
-      from: fmtYmd(prevFrom),
-      to: fmtYmd(prevTo),
-    });
-    hours = Object.values(hoursByDay).reduce((a, b) => a + b, 0);
-    hoursPrev = Object.values(hoursPrevByDay).reduce((a, b) => a + b, 0);
-  } catch {
+    const uid = (window as any).__AXON_UID__;
+    const statusUrl = new URL("/api/harvest/status", window.location.origin);
+    if (uid) {
+      statusUrl.searchParams.set("uid", uid);
+    }
+    const statusRes = await fetch(statusUrl.toString(), { cache: "no-store" });
+    const statusJson = await statusRes.json();
+    harvestConnected = statusJson?.connected === true;
+  } catch (e) {
+    console.warn("Failed to check Harvest status:", e);
     harvestConnected = false;
+  }
+
+  // If connected, fetch hours
+  if (harvestConnected) {
+    try {
+      hoursByDay = await fetchHarvestHoursByDay({ from: fmtYmd(r.from), to: fmtYmd(r.to) });
+      hoursPrevByDay = await fetchHarvestHoursByDay({
+        from: fmtYmd(prevFrom),
+        to: fmtYmd(prevTo),
+      });
+      hours = Object.values(hoursByDay).reduce((a, b) => a + b, 0);
+      hoursPrev = Object.values(hoursPrevByDay).reduce((a, b) => a + b, 0);
+    } catch (e) {
+      console.warn("Failed to fetch Harvest hours:", e);
+      // Keep harvestConnected as true if status check passed, but log the error
+    }
   }
 
   const doneByDay = computeCompletedTasksByDay(tasks);

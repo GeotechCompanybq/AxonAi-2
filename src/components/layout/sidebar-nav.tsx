@@ -1,8 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname } from "next/navigation";
-import { useCallback, useState } from "react";
+import { usePathname, useRouter } from "next/navigation";
+import { useState, useEffect, useCallback } from "react";
 import {
   LayoutDashboard,
   CalendarPlus,
@@ -13,24 +13,56 @@ import {
   BarChart3,
   MessagesSquare,
   Clock4,
+  ChevronRight,
+  ChevronDown,
+  GripVertical,
+  Pin,
+  PinOff,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import {
+  trackRecentItem,
+  toggleMenuExpanded,
+  isMenuExpanded,
+  toggleItemPinned,
+  isItemPinned,
+  getMostRecentItem,
+} from "@/lib/sidebar-storage";
 
-const navCore = [{ href: "/dashboard", label: "Overview", icon: LayoutDashboard }];
+type NavItem = {
+  href: string;
+  label: string;
+  icon: any;
+  submenu?: Array<{ href: string; label: string }>;
+};
 
-const navPlanning = [
+const navCore: NavItem[] = [
+  { href: "/dashboard", label: "Overview", icon: LayoutDashboard },
+];
+
+const navPlanning: NavItem[] = [
   { href: "/schedule/create", label: "Create Schedule", icon: CalendarPlus },
   { href: "/tasks", label: "My Tasks", icon: ListChecks },
   { href: "/calendar", label: "Calendar", icon: CalendarDays },
 ];
 
-const navInsights = [
+const navInsights: NavItem[] = [
   { href: "/analytics", label: "Analytics", icon: BarChart3 },
-  { href: "/timesheets", label: "Timesheets", icon: Clock4 },
+  {
+    href: "/timesheets",
+    label: "Timesheets",
+    icon: Clock4,
+    submenu: [
+      { href: "/timesheets", label: "Timesheets" },
+      { href: "/timesheets/drafts", label: "Timesheet Drafts" },
+      { href: "/timesheets/settings", label: "Timesheet Settings" },
+      { href: "/timesheets/grayquarter", label: "Grayquarter Timesheets" },
+    ],
+  },
   { href: "/weekly-summary", label: "Weekly Summary", icon: BarChart3 },
 ];
 
-const navSupport = [
+const navSupport: NavItem[] = [
   { href: "/settings", label: "Settings", icon: Settings },
   { href: "/help", label: "Help & Support", icon: LifeBuoy },
   { href: "/talk-to-founder", label: "Talk to Founder", icon: MessagesSquare },
@@ -38,14 +70,34 @@ const navSupport = [
 
 export function SidebarNav() {
   const pathname = usePathname();
-  const [showTsPanel, setShowTsPanel] = useState(false);
-  const [panelTop, setPanelTop] = useState(0);
-  const [pinnedTs, setPinnedTs] = useState(false);
+  const router = useRouter();
+  const [draggedItem, setDraggedItem] = useState<string | null>(null);
+  const [mostRecent, setMostRecent] = useState<string | null>(null);
 
-  const openTs = useCallback(() => setShowTsPanel(true), []);
-  const closeTs = useCallback(() => {
-    if (!pinnedTs) setShowTsPanel(false);
-  }, [pinnedTs]);
+  // Track current page as recent and expand parent menu if needed
+  useEffect(() => {
+    if (pathname) {
+      trackRecentItem(pathname);
+      setMostRecent(getMostRecentItem());
+      
+      // Auto-expand parent menu if current path is in a submenu
+      const allItems = [...navCore, ...navPlanning, ...navInsights, ...navSupport];
+      for (const item of allItems) {
+        if (item.submenu) {
+          const isInSubmenu = item.submenu.some((sub) => pathname === sub.href || pathname.startsWith(sub.href + "/"));
+          if (isInSubmenu && !isMenuExpanded(item.href)) {
+            toggleMenuExpanded(item.href);
+          }
+        }
+      }
+    }
+  }, [pathname]);
+
+  const handleItemClick = (href: string) => {
+    trackRecentItem(href);
+    setMostRecent(getMostRecentItem());
+    router.push(href);
+  };
 
   const baseButtonClass =
     "w-full justify-start rounded-xl relative overflow-hidden " +
@@ -58,171 +110,148 @@ export function SidebarNav() {
     "bg-primary/15 text-primary border border-primary/20 " +
     "shadow-[0_0_0_1px_hsl(var(--ring)/0.25),0_0_28px_hsl(var(--ring)/0.25)]";
 
-  const renderNavItems = (
-    items: Array<{ href: string; label: string; icon: any }>
-  ) =>
-    items.map((item) => {
-      const isActive =
-        pathname === item.href ||
-        (item.href !== "/dashboard" && pathname.startsWith(item.href));
-      return (
+  const recentClass = "ring-1 ring-primary/30";
+
+  const renderNavItem = (item: NavItem, index: number) => {
+    const isActive =
+      pathname === item.href ||
+      (item.href !== "/dashboard" && pathname.startsWith(item.href));
+    const isRecent = mostRecent === item.href;
+    const isExpanded = isMenuExpanded(item.href);
+    const isPinned = isItemPinned(item.href);
+    const hasSubmenu = item.submenu && item.submenu.length > 0;
+
+    return (
+      <div key={item.href} className="relative group">
         <div
-          key={item.href}
-          className="relative"
-          onMouseEnter={(e) => {
-            if (item.href === "/timesheets") {
-              const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
-              setPanelTop(Math.round(rect.top));
-              openTs();
-            }
+          draggable
+          onDragStart={(e) => {
+            setDraggedItem(item.href);
+            e.dataTransfer.effectAllowed = "move";
           }}
-          onMouseLeave={() => {
-            if (item.href === "/timesheets") {
-              setTimeout(() => closeTs(), 80);
-            }
+          onDragOver={(e) => {
+            e.preventDefault();
+            e.dataTransfer.dropEffect = "move";
           }}
+          onDrop={(e) => {
+            e.preventDefault();
+            // Drag and drop reordering could be implemented here
+            setDraggedItem(null);
+          }}
+          onDragEnd={() => setDraggedItem(null)}
+          className={cn(
+            "flex items-center gap-1",
+            draggedItem === item.href && "opacity-50"
+          )}
         >
-          <Link
-            href={item.href}
-            className={cn(
-              baseButtonClass,
-              "flex items-center gap-3 px-3 py-2.5",
-              "hover:translate-x-0.5",
-              isActive && activeClass
-            )}
-          >
-            <item.icon
-              className={cn(
-                "h-5 w-5 drop-shadow-[0_0_10px_rgba(0,212,255,0.35)] shrink-0",
-                isActive ? "text-primary" : "text-foreground"
-              )}
-            />
-            <span className="text-sm font-medium">{item.label}</span>
-          </Link>
-          {/* Hover slide-out for Timesheets */}
-          {item.href === "/timesheets" && (
-            <div
-              onMouseEnter={openTs}
-              onMouseLeave={closeTs}
-              className={cn(
-                "fixed z-40 w-[280px] md:w-[320px]",
-                "transition-all duration-200",
-                showTsPanel
-                  ? "opacity-100 translate-x-0 pointer-events-auto"
-                  : "opacity-0 translate-x-2 pointer-events-none"
-              )}
-              style={{
-                left: "calc(256px + 12px)",
-                top: panelTop,
-              }}
-            >
-              <div className="relative rounded-2xl border border-white/10 bg-background/90 backdrop-blur-xl shadow-[0_12px_32px_rgba(0,0,0,0.45)] p-2">
-                <div
-                  aria-hidden
-                  className="absolute -left-1 top-4 h-3 w-3 rotate-45 bg-background/90 border-t border-l border-white/10"
+          <div className="flex-1">
+            <div className="flex items-center gap-1">
+              <Link
+                href={item.href}
+                onClick={() => handleItemClick(item.href)}
+                className={cn(
+                  baseButtonClass,
+                  "flex items-center gap-3 px-3 py-2.5 flex-1",
+                  "hover:translate-x-0.5",
+                  isActive && activeClass,
+                  isRecent && !isActive && recentClass
+                )}
+              >
+                <item.icon
+                  className={cn(
+                    "h-5 w-5 drop-shadow-[0_0_10px_rgba(0,212,255,0.35)] shrink-0",
+                    isActive ? "text-primary" : "text-foreground"
+                  )}
                 />
-                <div className="flex items-center justify-between px-2 py-1">
-                  <div className="text-xs uppercase tracking-wide text-muted-foreground">
-                    Timesheets
-                  </div>
+                <span className="text-sm font-medium flex-1">{item.label}</span>
+                {hasSubmenu && (
                   <button
-                    className={cn(
-                      "text-[10px] px-2 py-0.5 rounded-md border",
-                      pinnedTs
-                        ? "bg-primary/20 text-primary border-primary/30"
-                        : "hover:bg-primary/10 border-white/10"
-                    )}
-                    onClick={() => setPinnedTs((v) => !v)}
+                    onClick={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      toggleMenuExpanded(item.href);
+                    }}
+                    className="p-1 hover:bg-white/10 rounded"
                   >
-                    {pinnedTs ? "Unpin" : "Pin"}
+                    {isExpanded ? (
+                      <ChevronDown className="h-4 w-4" />
+                    ) : (
+                      <ChevronRight className="h-4 w-4" />
+                    )}
                   </button>
-                </div>
-                <ul className="space-y-1">
-                  <li>
-                    <Link
-                      href="/timesheets"
-                      className={cn(
-                        "block rounded-md px-3 py-2 text-sm",
-                        pathname === "/timesheets"
-                          ? "bg-primary/15 text-primary border border-primary/20"
-                          : "hover:bg-primary/10"
-                      )}
-                    >
-                      Timesheets
-                    </Link>
-                  </li>
-                  <li>
-                    <Link
-                      href="/timesheets/drafts"
-                      className={cn(
-                        "block rounded-md px-3 py-2 text-sm",
-                        pathname === "/timesheets/drafts"
-                          ? "bg-primary/15 text-primary border border-primary/20"
-                          : "hover:bg-primary/10"
-                      )}
-                    >
-                      Timesheet Drafts
-                    </Link>
-                  </li>
-                  <li>
-                    <Link
-                      href="/timesheets/settings"
-                      className={cn(
-                        "block rounded-md px-3 py-2 text-sm",
-                        pathname === "/timesheets/settings"
-                          ? "bg-primary/15 text-primary border border-primary/20"
-                          : "hover:bg-primary/10"
-                      )}
-                    >
-                      Timesheet Settings
-                    </Link>
-                  </li>
-                  <li>
-                    <Link
-                      href="/timesheets/grayquarter"
-                      className={cn(
-                        "block rounded-md px-3 py-2 text-sm",
-                        pathname === "/timesheets/grayquarter"
-                          ? "bg-primary/15 text-primary border border-primary/20"
-                          : "hover:bg-primary/10"
-                      )}
-                    >
-                      Grayquarter Timesheets
-                    </Link>
-                  </li>
-                </ul>
+                )}
+              </Link>
+              <button
+                onClick={() => toggleItemPinned(item.href)}
+                className={cn(
+                  "p-1.5 rounded hover:bg-white/10 opacity-0 group-hover:opacity-100 transition-opacity",
+                  isPinned && "opacity-100"
+                )}
+                title={isPinned ? "Unpin" : "Pin"}
+              >
+                {isPinned ? (
+                  <Pin className="h-3.5 w-3.5 text-primary" />
+                ) : (
+                  <PinOff className="h-3.5 w-3.5 text-muted-foreground" />
+                )}
+              </button>
+              <div className="p-1 cursor-move opacity-0 group-hover:opacity-100 transition-opacity">
+                <GripVertical className="h-4 w-4 text-muted-foreground" />
               </div>
             </div>
-          )}
+
+            {/* Submenu */}
+            {hasSubmenu && isExpanded && (
+              <div className="ml-8 mt-1 space-y-1 border-l border-white/10 pl-3">
+                {item.submenu.map((subItem) => {
+                  const isSubActive = pathname === subItem.href;
+                  const isSubRecent = mostRecent === subItem.href;
+                  return (
+                    <Link
+                      key={subItem.href}
+                      href={subItem.href}
+                      onClick={() => handleItemClick(subItem.href)}
+                      className={cn(
+                        "block rounded-lg px-3 py-2 text-sm transition-colors",
+                        isSubActive
+                          ? "bg-primary/15 text-primary border border-primary/20"
+                          : "hover:bg-primary/10 text-foreground",
+                        isSubRecent && !isSubActive && recentClass
+                      )}
+                    >
+                      {subItem.label}
+                    </Link>
+                  );
+                })}
+              </div>
+            )}
+          </div>
         </div>
-      );
-    });
+      </div>
+    );
+  };
+
+  const renderNavSection = (
+    items: NavItem[],
+    sectionLabel: string
+  ) => (
+    <div className="space-y-1">
+      <div className="px-3 py-2 text-xs font-semibold text-muted-foreground/80 uppercase tracking-wider">
+        {sectionLabel}
+      </div>
+      <div className="space-y-1">
+        {items.map((item, index) => renderNavItem(item, index))}
+      </div>
+    </div>
+  );
 
   return (
     <nav className="flex flex-col h-full space-y-6">
-      <div className="space-y-1">
-        <div className="px-3 py-2 text-xs font-semibold text-muted-foreground/80 uppercase tracking-wider">
-          Dashboard
-        </div>
-        <div className="space-y-1">{renderNavItems(navCore)}</div>
-      </div>
-      <div className="space-y-1">
-        <div className="px-3 py-2 text-xs font-semibold text-muted-foreground/80 uppercase tracking-wider">
-          Planning
-        </div>
-        <div className="space-y-1">{renderNavItems(navPlanning)}</div>
-      </div>
-      <div className="space-y-1">
-        <div className="px-3 py-2 text-xs font-semibold text-muted-foreground/80 uppercase tracking-wider">
-          Insights
-        </div>
-        <div className="space-y-1">{renderNavItems(navInsights)}</div>
-      </div>
-      <div className="mt-auto space-y-1">
-        <div className="px-3 py-2 text-xs font-semibold text-muted-foreground/80 uppercase tracking-wider">
-          Support
-        </div>
-        <div className="space-y-1">{renderNavItems(navSupport)}</div>
+      {renderNavSection(navCore, "Dashboard")}
+      {renderNavSection(navPlanning, "Planning")}
+      {renderNavSection(navInsights, "Insights")}
+      <div className="mt-auto">
+        {renderNavSection(navSupport, "Support")}
       </div>
     </nav>
   );

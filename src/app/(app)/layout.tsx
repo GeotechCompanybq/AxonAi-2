@@ -33,7 +33,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   return (
     <div className="flex min-h-screen ai-grid-bg">
       {/* Always visible sidebar on desktop */}
-      <aside className="hidden md:flex w-64 flex-shrink-0">
+      <aside className="hidden md:flex w-72 flex-shrink-0">
         <AppSidebar />
       </aside>
       
