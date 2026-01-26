@@ -7,22 +7,14 @@ import {
   LayoutDashboard,
   CalendarPlus,
   ListChecks,
-  CalendarDays, // Added for Calendar
+  CalendarDays,
   Settings,
   LifeBuoy,
-  BarChart3, // Added BarChart3 import
-  MessagesSquare, // Added for Talk to Founder
+  BarChart3,
+  MessagesSquare,
   Clock4,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { useSidebar } from "@/components/ui/sidebar";
-import {
-  SidebarMenu,
-  SidebarMenuItem,
-  SidebarMenuButton,
-  SidebarGroup,
-  SidebarGroupLabel,
-} from "@/components/ui/sidebar";
 
 const navCore = [{ href: "/dashboard", label: "Overview", icon: LayoutDashboard }];
 
