@@ -9,7 +9,6 @@ import {
   type MicrosoftTokenSet,
 } from "@/lib/microsoft";
 import { getDb, getCollectionNames } from "@/lib/mongo";
-import crypto from "crypto";
 
 export const runtime = "nodejs";
 
@@ -23,6 +22,7 @@ type MeetingDraft = {
   spent_date: string; // YYYY-MM-DD
   hours: number;
   notes: string;
+  existingEntryId?: number; // If set, this entry should be updated instead of created
 };
 
 function parseIsoDate(value: string): Date | null {
@@ -59,11 +59,6 @@ function clampNotes(s: string, max = 255): string {
   const v = String(s || "").trim();
   if (!v) return "";
   return v.length > max ? v.slice(0, max - 1) + "…" : v;
-}
-
-// Create a short hash of Microsoft event ID for compact storage
-function shortHash(id: string): string {
-  return crypto.createHash("sha256").update(id).digest("hex").slice(0, 12);
 }
 
 function isExpired({ tokens }: { tokens: MicrosoftTokenSet }): boolean {
@@ -359,20 +354,27 @@ export async function POST(req: NextRequest) {
       to,
     });
 
-    const existingMarkers = new Set<string>();
+    // Create a map of existing entries for deduplication and updates
+    // Key: "subject|date|hours" (normalized for comparison)
+    // Value: { id: harvestEntryId, notes: currentNotes }
+    const existingEntries = new Map<string, { id: number; notes: string }>();
     for (const e of existing) {
-      const notes = String(e?.notes || "");
-      const match = notes.match(/\[MS:([^\]]+)\]/i);
-      if (match?.[1]) existingMarkers.add(match[1]);
+      const notes = String(e?.notes || "").trim();
+      const date = String(e?.spent_date || "").trim();
+      const hours = Number(e?.hours || 0);
+      const entryId = Number(e?.id || 0);
+      // Remove any [MS:...] markers from notes for comparison
+      const cleanNotes = notes.replace(/\[MS[^:]*:[^\]]+\]/gi, "").trim();
+      if (cleanNotes && date && hours > 0 && entryId > 0) {
+        const key = `${cleanNotes.toLowerCase()}|${date}|${hours.toFixed(2)}`;
+        existingEntries.set(key, { id: entryId, notes });
+      }
     }
 
     const drafts: MeetingDraft[] = [];
     for (const e of events) {
       const id = String(e?.id || "").trim();
       if (!id) continue;
-      const hash = shortHash(id);
-      // Check both full ID (legacy) and short hash
-      if (existingMarkers.has(id) || existingMarkers.has(hash)) continue;
       const subject = String(e?.subject || "Meeting").trim() || "Meeting";
       const isAllDay = Boolean(e?.isAllDay);
       if (isAllDay) continue;
@@ -391,14 +393,27 @@ export async function POST(req: NextRequest) {
       // Guard: keep in requested date list
       if (!dateList.includes(spent_date)) continue;
 
-      // Use short hash for compact, readable notes
-      const notes = clampNotes(`${subject} [MS:${hash}]`);
+      // Check for existing entry using subject, date, and hours
+      const dedupeKey = `${subject.toLowerCase()}|${spent_date}|${hours.toFixed(2)}`;
+      const existingEntry = existingEntries.get(dedupeKey);
+
+      // Notes without any codes - just the subject
+      const notes = clampNotes(subject);
+      
+      // If entry exists but notes are different, update it
+      // If entry doesn't exist, create it
+      if (existingEntry && existingEntry.notes === notes) {
+        // Entry exists with same notes, skip it
+        continue;
+      }
+
       drafts.push({
         microsoftEventId: id,
         subject,
         spent_date,
         hours,
         notes,
+        existingEntryId: existingEntry?.id,
       });
     }
 
@@ -410,16 +425,21 @@ export async function POST(req: NextRequest) {
     );
 
     if (dryRun) {
+      const wouldCreate = drafts.filter(d => !d.existingEntryId).length;
+      const wouldUpdate = drafts.filter(d => d.existingEntryId).length;
       return NextResponse.json({
         ok: true,
         dryRun: true,
         target,
         drafts,
+        wouldCreate,
+        wouldUpdate,
         skippedAlreadyPosted: events.length - drafts.length,
       });
     }
 
     const created: any[] = [];
+    const updated: any[] = [];
     const errors: { microsoftEventId: string; error: string }[] = [];
     for (const d of drafts) {
       try {
@@ -430,8 +450,16 @@ export async function POST(req: NextRequest) {
           hours: d.hours,
           notes: d.notes,
         };
-        const res = await fetch("https://api.harvestapp.com/v2/time_entries", {
-          method: "POST",
+
+        // If existingEntryId is set, update the existing entry; otherwise create a new one
+        const isUpdate = d.existingEntryId !== undefined;
+        const url = isUpdate
+          ? `https://api.harvestapp.com/v2/time_entries/${d.existingEntryId}`
+          : "https://api.harvestapp.com/v2/time_entries";
+        const method = isUpdate ? "PATCH" : "POST";
+
+        const res = await fetch(url, {
+          method,
           headers: {
             Authorization: `Bearer ${harvestAuth.token}`,
             "Harvest-Account-Id": harvestAuth.accountId,
@@ -450,8 +478,9 @@ export async function POST(req: NextRequest) {
             JSON.stringify(json);
           throw new Error(msg);
         }
-        // Log successful creation for debugging
-        console.log('[Harvest] Created entry:', {
+        // Log successful operation for debugging
+        const action = isUpdate ? "Updated" : "Created";
+        console.log(`[Harvest] ${action} entry:`, {
           id: json?.id,
           project: json?.project?.name,
           task: json?.task?.name,
@@ -459,11 +488,15 @@ export async function POST(req: NextRequest) {
           spent_date: json?.spent_date,
           notes: json?.notes?.substring(0, 50),
         });
-        created.push(json);
+        if (isUpdate) {
+          updated.push(json);
+        } else {
+          created.push(json);
+        }
       } catch (e: any) {
         errors.push({
           microsoftEventId: d.microsoftEventId,
-          error: e?.message || "Create failed",
+          error: e?.message || (d.existingEntryId ? "Update failed" : "Create failed"),
         });
       }
     }
@@ -474,9 +507,19 @@ export async function POST(req: NextRequest) {
       target,
       attempted: drafts.length,
       createdCount: created.length,
+      updatedCount: updated.length,
       errorCount: errors.length,
       errors,
       created: created.map(entry => ({
+        id: entry?.id,
+        project: entry?.project?.name,
+        task: entry?.task?.name,
+        hours: entry?.hours,
+        spent_date: entry?.spent_date,
+        notes: entry?.notes,
+        harvest_url: `https://app.harvestapp.com/time/entries/${entry?.id}`,
+      })),
+      updated: updated.map(entry => ({
         id: entry?.id,
         project: entry?.project?.name,
         task: entry?.task?.name,
