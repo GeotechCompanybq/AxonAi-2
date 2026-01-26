@@ -45,7 +45,10 @@ export function NeededHours() {
       if (uid) {
         statusUrl.searchParams.set("uid", uid);
       }
-      const statusRes = await fetch(statusUrl.toString(), { cache: "no-store" });
+      const statusRes = await fetch(statusUrl.toString(), { 
+        cache: "no-store",
+        credentials: "include" // Ensure cookies are sent
+      });
       const statusJson = await statusRes.json();
       const connected = statusJson?.connected === true;
       setIsConnected(connected);
@@ -68,7 +71,11 @@ export function NeededHours() {
       if (uid) {
         url.searchParams.set("uid", uid);
       }
-      const res = await fetch(url.toString(), { cache: "no-store" });
+      // Include credentials to send cookies
+      const res = await fetch(url.toString(), { 
+        cache: "no-store",
+        credentials: "include" // Ensure cookies are sent
+      });
       const json = await res.json();
       if (!res.ok) {
         throw new Error(json?.error || "Failed to load timesheets");

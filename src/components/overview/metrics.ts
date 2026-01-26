@@ -55,7 +55,11 @@ async function fetchHarvestHoursByDay({
   if (uid) {
     url.searchParams.set("uid", uid);
   }
-  const res = await fetch(url.toString(), { cache: "no-store" });
+  // Include credentials to send cookies
+  const res = await fetch(url.toString(), { 
+    cache: "no-store",
+    credentials: "include" // Ensure cookies are sent
+  });
   const json = await res.json();
   if (!res.ok) throw new Error(json?.error || "Failed to fetch Harvest timesheets");
   const entries: any[] = Array.isArray(json?.timeEntries) ? json.timeEntries : [];
@@ -106,33 +110,54 @@ export async function buildOverviewKpis(range: DateRange | undefined) {
   let harvestConnected = false;
 
   // Check Harvest connection status first
+  let statusCheckPassed = false;
   try {
     const uid = (window as any).__AXON_UID__;
-    const statusUrl = new URL("/api/harvest/status", window.location.origin);
-    if (uid) {
+    if (!uid) {
+      console.warn("No UID available for Harvest status check");
+    } else {
+      const statusUrl = new URL("/api/harvest/status", window.location.origin);
       statusUrl.searchParams.set("uid", uid);
+      // Include credentials to send cookies
+      const statusRes = await fetch(statusUrl.toString(), { 
+        cache: "no-store",
+        credentials: "include" // Ensure cookies are sent
+      });
+      const statusJson = await statusRes.json();
+      statusCheckPassed = statusJson?.connected === true;
+      console.log("Harvest connection status:", { 
+        connected: statusCheckPassed, 
+        source: statusJson?.source,
+        accountId: statusJson?.accountId,
+        uid 
+      });
     }
-    const statusRes = await fetch(statusUrl.toString(), { cache: "no-store" });
-    const statusJson = await statusRes.json();
-    harvestConnected = statusJson?.connected === true;
   } catch (e) {
     console.warn("Failed to check Harvest status:", e);
-    harvestConnected = false;
   }
 
-  // If connected, fetch hours
-  if (harvestConnected) {
-    try {
-      hoursByDay = await fetchHarvestHoursByDay({ from: fmtYmd(r.from), to: fmtYmd(r.to) });
-      hoursPrevByDay = await fetchHarvestHoursByDay({
-        from: fmtYmd(prevFrom),
-        to: fmtYmd(prevTo),
-      });
-      hours = Object.values(hoursByDay).reduce((a, b) => a + b, 0);
-      hoursPrev = Object.values(hoursPrevByDay).reduce((a, b) => a + b, 0);
-    } catch (e) {
+  // Try to fetch hours - even if status check failed, tokens might be in DB
+  try {
+    hoursByDay = await fetchHarvestHoursByDay({ from: fmtYmd(r.from), to: fmtYmd(r.to) });
+    hoursPrevByDay = await fetchHarvestHoursByDay({
+      from: fmtYmd(prevFrom),
+      to: fmtYmd(prevTo),
+    });
+    hours = Object.values(hoursByDay).reduce((a, b) => a + b, 0);
+    hoursPrev = Object.values(hoursPrevByDay).reduce((a, b) => a + b, 0);
+    // If fetch succeeded, we're connected
+    harvestConnected = true;
+    console.log("Harvest hours fetched successfully:", { hours, hoursPrev, entries: Object.keys(hoursByDay).length });
+  } catch (e: any) {
+    // Check error message to determine if it's a connection issue
+    const errorMsg = e?.message?.toLowerCase() || "";
+    if (errorMsg.includes("not connected") || errorMsg.includes("unauthorized") || errorMsg.includes("401")) {
+      harvestConnected = false;
+      console.log("Harvest not connected - connection error");
+    } else {
+      // Other errors (network, timeout, etc.) - mark as not connected for now
+      harvestConnected = false;
       console.warn("Failed to fetch Harvest hours:", e);
-      // Keep harvestConnected as true if status check passed, but log the error
     }
   }
 

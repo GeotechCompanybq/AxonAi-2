@@ -71,7 +71,10 @@ export function CalendarView() {
         url.searchParams.set('tz', Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC');
         url.searchParams.set('uid', user.uid);
 
-        const res = await fetch(url.toString());
+        // Include credentials to send cookies
+        const res = await fetch(url.toString(), {
+          credentials: "include" // Ensure cookies are sent
+        });
         const data = await res.json();
 
         if (res.ok && data.events) {
@@ -360,9 +363,18 @@ export function CalendarView() {
               </div>
             </ScrollArea>
           ) : (
-            <p className="text-sm text-muted-foreground text-center py-4">
-              {currentCalendarDate ? "No events for this day." : "Select a day to see events."}
-            </p>
+            <div className="text-sm text-muted-foreground text-center py-4 space-y-2">
+              {microsoftConnected === false && (
+                <p className="text-red-600">Not connected to Microsoft Calendar</p>
+              )}
+              <p>
+                {currentCalendarDate 
+                  ? (microsoftConnected === false 
+                      ? "Connect Microsoft Calendar to see your meetings." 
+                      : "No events for this day.")
+                  : "Select a day to see events."}
+              </p>
+            </div>
           )}
         </CardContent>
       </Card>
