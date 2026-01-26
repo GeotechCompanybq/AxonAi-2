@@ -679,10 +679,22 @@ export default function TimesheetsPage() {
       const json = await res.json();
       if (!res.ok) throw new Error(json?.error || "Failed to post meetings");
       const createdCount = Number(json?.createdCount || 0);
+      const updatedCount = Number(json?.updatedCount || 0);
       const errorCount = Number(json?.errorCount || 0);
       
       // Build detailed message with user and account info
-      let message = `Posted ${createdCount} meeting${createdCount === 1 ? "" : "s"} to Harvest`;
+      const parts: string[] = [];
+      if (createdCount > 0) {
+        parts.push(`Created ${createdCount} meeting${createdCount === 1 ? "" : "s"}`);
+      }
+      if (updatedCount > 0) {
+        parts.push(`Updated ${updatedCount} meeting${updatedCount === 1 ? "" : "s"}`);
+      }
+      if (parts.length === 0) {
+        parts.push("No changes needed");
+      }
+      let message = parts.join(" and ") + " in Harvest";
+      
       if (json?.harvestUser?.name) {
         message += ` as ${json.harvestUser.name}`;
       }
@@ -693,9 +705,14 @@ export default function TimesheetsPage() {
         message += ` (${errorCount} failed)`;
       }
       
-      // Log created entries for debugging
+      // Log created/updated entries for debugging
       if (json?.created?.length > 0) {
         console.log('[Harvest] Created entries:', json.created);
+      }
+      if (json?.updated?.length > 0) {
+        console.log('[Harvest] Updated entries:', json.updated);
+      }
+      if (createdCount > 0 || updatedCount > 0) {
         message += `\n\nView in Harvest: Check your timesheet for dates ${fromDate} to ${toDate}`;
       }
       
