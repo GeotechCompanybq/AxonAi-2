@@ -14,6 +14,8 @@ export async function GET(req: NextRequest) {
 
     const cookieStore = await cookies();
     const uidFromCookie = cookieStore.get("microsoft_uid")?.value || undefined;
+    const codeVerifier = cookieStore.get("microsoft_code_verifier")?.value;
+    
     const uid =
       state
         ?.split("|")
@@ -28,14 +30,25 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ error: "Missing code" }, { status: 400 });
     }
 
-    const tokens = await exchangeMicrosoftCodeForTokens({ req, code });
+    if (!codeVerifier) {
+      return NextResponse.json({ error: "Missing PKCE code verifier" }, { status: 400 });
+    }
+
+    const tokens = await exchangeMicrosoftCodeForTokens({ req, code, codeVerifier });
 
     // Persist in httpOnly cookies for convenience
     await setMicrosoftAuthCookies({ tokens });
 
-    // Clear temporary uid cookie
+    // Clear temporary cookies
     try {
       cookieStore.set("microsoft_uid", "", {
+        httpOnly: true,
+        sameSite: "lax",
+        secure: true,
+        path: "/",
+        maxAge: 0,
+      });
+      cookieStore.set("microsoft_code_verifier", "", {
         httpOnly: true,
         sameSite: "lax",
         secure: true,

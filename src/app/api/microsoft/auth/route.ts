@@ -26,8 +26,18 @@ export async function GET(req: NextRequest) {
   const state =
     stateParts.length > 0 ? stateParts.join("|") : "microsoft_oauth_state";
 
-  const url = buildMicrosoftAuthorizeUrl({ req, state });
+  const { url, codeVerifier } = buildMicrosoftAuthorizeUrl({ req, state });
   const res = NextResponse.redirect(url);
+  
+  // Store code_verifier in cookie for PKCE verification
+  res.cookies.set("microsoft_code_verifier", codeVerifier, {
+    httpOnly: true,
+    sameSite: "lax",
+    secure: true,
+    path: "/",
+    maxAge: 60 * 10, // 10 minutes
+  });
+  
   // uid fallback cookie in case provider drops state
   if (uid) {
     try {
