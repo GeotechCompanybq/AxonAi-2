@@ -3,7 +3,7 @@ import { cookies } from "next/headers";
 import { getDb, getCollectionNames } from "@/lib/mongo";
 import { EmailNotificationService } from "@/lib/email-notifications";
 
-async function fetchAccessibleSites(token: string) {
+async function fetchAccessibleSites(token: string): Promise<{ sites: any[]; authError?: boolean }> {
   try {
     const sitesRes = await fetch(
       "https://api.atlassian.com/oauth/token/accessible-resources",
@@ -16,13 +16,16 @@ async function fetchAccessibleSites(token: string) {
     );
 
     if (!sitesRes.ok) {
+      if (sitesRes.status === 401 || sitesRes.status === 403) {
+        return { sites: [], authError: true };
+      }
       throw new Error(`Failed to fetch Jira sites: ${sitesRes.status}`);
     }
 
-    return await sitesRes.json();
+    return { sites: await sitesRes.json() };
   } catch (error) {
     console.error("Error fetching Jira sites:", error);
-    return [];
+    return { sites: [] };
   }
 }
 
@@ -62,9 +65,13 @@ function mapJiraPriorityToAppPriority(priority: string): string {
   return priorityMap[priority] || "medium";
 }
 
-async function fetchJiraTasks(token: string) {
+async function fetchJiraTasks(token: string): Promise<{ tasks: any[]; authError?: boolean }> {
   const allTasks: any[] = [];
-  const sites = await fetchAccessibleSites(token);
+  const { sites, authError } = await fetchAccessibleSites(token);
+  
+  if (authError) {
+    return { tasks: [], authError: true };
+  }
 
   // First, get user details to log who's retrieving tasks
   const meRes = await fetch("https://api.atlassian.com/me", {
@@ -73,6 +80,11 @@ async function fetchJiraTasks(token: string) {
       Accept: "application/json",
     },
   });
+  
+  if (!meRes.ok && (meRes.status === 401 || meRes.status === 403)) {
+    return { tasks: [], authError: true };
+  }
+  
   const me = await meRes.json();
   const meAccountId = me?.account_id || me?.accountId || "";
   console.log(
@@ -155,7 +167,7 @@ async function fetchJiraTasks(token: string) {
   }
 
   console.log(`Total tasks retrieved: ${allTasks.length}`);
-  return allTasks;
+  return { tasks: allTasks };
 }
 
 async function refreshJiraToken(refreshToken: string) {
@@ -245,8 +257,14 @@ export async function GET(req: NextRequest) {
       );
     }
 
-    const tasks = await fetchJiraTasks(token);
-    return NextResponse.json({ tasks });
+    const result = await fetchJiraTasks(token);
+    if (result.authError) {
+      return NextResponse.json(
+        { error: "Jira authentication expired. Please reconnect in Settings.", authError: true },
+        { status: 401 }
+      );
+    }
+    return NextResponse.json({ tasks: result.tasks });
   } catch (e) {
     console.error("jira tasks error", e);
     const message =

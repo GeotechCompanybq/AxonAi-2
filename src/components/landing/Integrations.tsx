@@ -1,25 +1,21 @@
 "use client";
 
 import { motion } from "framer-motion";
-import { Calendar, LayoutDashboard, Clock } from "lucide-react";
 
 const integrations = [
   { 
     name: "Monday.com", 
-    icon: LayoutDashboard,
-    color: "text-[#ff3d57]",
+    logo: "/Intergrations/monday.png",
     desc: "Project management & tasks"
   },
   { 
     name: "Jira", 
-    icon: Calendar,
-    color: "text-[#0052CC]",
+    logo: "/Intergrations/jira-software.png",
     desc: "Issue tracking & agile"
   },
   { 
     name: "Harvest", 
-    icon: Clock,
-    color: "text-[#F96E46]",
+    logo: "/Intergrations/Harvest-New.png",
     desc: "Time tracking & invoicing"
   },
 ];
@@ -48,7 +44,6 @@ export function Integrations() {
         </motion.p>
         <div className="mt-10 grid grid-cols-1 sm:grid-cols-3 gap-6 max-w-4xl mx-auto">
           {integrations.map((integration, i) => {
-            const Icon = integration.icon;
             return (
               <motion.div
                 key={integration.name}
@@ -58,7 +53,11 @@ export function Integrations() {
                 viewport={{ once: true }}
                 className="flex flex-col items-center justify-center p-8 rounded-2xl border border-white/10 bg-background/40 backdrop-blur hover:border-white/20 transition-colors"
               >
-                <Icon className={`h-12 w-12 ${integration.color}`} />
+                <img 
+                  src={integration.logo} 
+                  alt={integration.name}
+                  className="h-16 w-auto object-contain"
+                />
                 <div className="mt-4 text-lg font-semibold">{integration.name}</div>
                 <p className="mt-2 text-sm text-muted-foreground text-center">{integration.desc}</p>
               </motion.div>

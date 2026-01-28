@@ -100,12 +100,19 @@ export function HarvestConnect({
     <Card>
       <CardContent className="py-6 space-y-3">
         <div className="flex items-center justify-between">
-          <div>
-            <div className="text-sm font-medium">
-              {label || (isAlt ? "Harvest (Comparison)" : "Harvest")}
-            </div>
-            <div className="text-xs text-muted-foreground">
-              Connect to pull timesheets
+          <div className="flex items-center gap-3">
+            <img 
+              src="/Intergrations/Harvest-New.png" 
+              alt="Harvest" 
+              className="h-8 w-auto object-contain"
+            />
+            <div>
+              <div className="text-sm font-medium">
+                {label || (isAlt ? "Harvest (Comparison)" : "Harvest")}
+              </div>
+              <div className="text-xs text-muted-foreground">
+                Connect to pull timesheets
+              </div>
             </div>
           </div>
           <div className="flex gap-2">

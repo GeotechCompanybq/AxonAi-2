@@ -137,10 +137,17 @@ export function JiraConnect() {
     <Card>
       <CardContent className="py-6 space-y-3">
         <div className="flex items-center justify-between">
-          <div>
-            <div className="text-sm font-medium">Jira</div>
-            <div className="text-xs text-muted-foreground">
-              Connect to pull tasks and plan with AI
+          <div className="flex items-center gap-3">
+            <img 
+              src="/Intergrations/jira-software.png" 
+              alt="Jira" 
+              className="h-8 w-auto object-contain"
+            />
+            <div>
+              <div className="text-sm font-medium">Jira</div>
+              <div className="text-xs text-muted-foreground">
+                Connect to pull tasks and plan with AI
+              </div>
             </div>
           </div>
           <div className="flex gap-2">

@@ -79,10 +79,17 @@ export function MicrosoftConnect({ returnTo }: { returnTo?: string }) {
     <Card>
       <CardContent className="py-6 space-y-3">
         <div className="flex items-center justify-between">
-          <div>
-            <div className="text-sm font-medium">Microsoft / Teams Calendar</div>
-            <div className="text-xs text-muted-foreground">
-              Connect to pull your calendar events (Teams meetings are included)
+          <div className="flex items-center gap-3">
+            <img 
+              src="/Intergrations/microsoft.png" 
+              alt="Microsoft" 
+              className="h-8 w-auto object-contain"
+            />
+            <div>
+              <div className="text-sm font-medium">Microsoft / Teams Calendar</div>
+              <div className="text-xs text-muted-foreground">
+                Connect to pull your calendar events (Teams meetings are included)
+              </div>
             </div>
           </div>
           <div className="flex gap-2">
