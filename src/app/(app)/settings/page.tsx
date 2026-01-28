@@ -39,7 +39,7 @@ export default function SettingsPage() {
       <MondayConnect />
       <JiraConnect />
       <HarvestConnect returnTo="/settings" />
-      <HarvestConnect returnTo="/settings" conn="alt" label="Harvest (Comparison)" />
+      <HarvestConnect returnTo="/settings" conn="alt" label="Grayquarter Harvest" />
     </div>
   );
 }

@@ -8,6 +8,8 @@ import {
 
 export async function GET(req: NextRequest) {
   try {
+    const secureCookie =
+      req.nextUrl.protocol === "https:" || process.env.NODE_ENV === "production";
     const { searchParams } = new URL(req.url);
     const code = searchParams.get("code");
     const state = searchParams.get("state") || undefined;
@@ -44,14 +46,14 @@ export async function GET(req: NextRequest) {
       cookieStore.set("microsoft_uid", "", {
         httpOnly: true,
         sameSite: "lax",
-        secure: true,
+        secure: secureCookie,
         path: "/",
         maxAge: 0,
       });
       cookieStore.set("microsoft_code_verifier", "", {
         httpOnly: true,
         sameSite: "lax",
-        secure: true,
+        secure: secureCookie,
         path: "/",
         maxAge: 0,
       });

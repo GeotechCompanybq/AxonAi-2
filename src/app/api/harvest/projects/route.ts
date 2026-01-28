@@ -303,7 +303,7 @@ export async function GET(req: NextRequest) {
 
         if (!chosen) {
           return NextResponse.json(
-            { error: "Not authorized (Harvest account mismatch). Reconnect Harvest (Comparison)." },
+            { error: "Not authorized (Harvest account mismatch). Reconnect Grayquarter Harvest." },
             { status: 403 }
           );
         }

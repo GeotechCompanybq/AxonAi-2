@@ -363,10 +363,11 @@ export async function setMicrosoftAuthCookies({
   tokens: MicrosoftTokenSet;
 }): Promise<void> {
   const cookieStore = await cookies();
+  const secureCookie = process.env.NODE_ENV === "production";
   cookieStore.set("microsoft_token", tokens.accessToken, {
     httpOnly: true,
     sameSite: "lax",
-    secure: true,
+    secure: secureCookie,
     path: "/",
     maxAge: 60 * 60 * 24 * 30,
   });
@@ -374,7 +375,7 @@ export async function setMicrosoftAuthCookies({
     cookieStore.set("microsoft_refresh_token", tokens.refreshToken, {
       httpOnly: true,
       sameSite: "lax",
-      secure: true,
+      secure: secureCookie,
       path: "/",
       maxAge: 60 * 60 * 24 * 365,
     });
@@ -383,7 +384,7 @@ export async function setMicrosoftAuthCookies({
     cookieStore.set("microsoft_expires_at", String(tokens.expiresAt), {
       httpOnly: true,
       sameSite: "lax",
-      secure: true,
+      secure: secureCookie,
       path: "/",
       maxAge: 60 * 60 * 24 * 365,
     });

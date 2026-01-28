@@ -108,7 +108,7 @@ export function HarvestConnect({
             />
             <div>
               <div className="text-sm font-medium">
-                {label || (isAlt ? "Harvest (Comparison)" : "Harvest")}
+                {label || (isAlt ? "Grayquarter Harvest" : "Harvest")}
               </div>
               <div className="text-xs text-muted-foreground">
                 Connect to pull timesheets

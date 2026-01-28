@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { buildMicrosoftAuthorizeUrl, getMicrosoftClientSecret } from "@/lib/microsoft";
 
 export async function GET(req: NextRequest) {
+  const secureCookie =
+    req.nextUrl.protocol === "https:" || process.env.NODE_ENV === "production";
   const clientId = process.env.MICROSOFT_CLIENT_ID;
   if (!clientId) {
     return NextResponse.json(
@@ -33,7 +35,7 @@ export async function GET(req: NextRequest) {
   res.cookies.set("microsoft_code_verifier", codeVerifier, {
     httpOnly: true,
     sameSite: "lax",
-    secure: true,
+    secure: secureCookie,
     path: "/",
     maxAge: 60 * 10, // 10 minutes
   });
@@ -44,7 +46,7 @@ export async function GET(req: NextRequest) {
       res.cookies.set("microsoft_uid", uid, {
         httpOnly: true,
         sameSite: "lax",
-        secure: true,
+        secure: secureCookie,
         path: "/",
         maxAge: 60 * 10,
       });
