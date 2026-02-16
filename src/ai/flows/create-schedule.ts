@@ -45,7 +45,8 @@ export async function createSchedule(input: CreateScheduleInput): Promise<Create
   return createScheduleFlow(input);
 }
 
-const createSchedulePrompt = ai.definePrompt({
+// NOTE: Genkit typings can differ by provider; cast to any to avoid TS overload conflicts.
+const createSchedulePrompt = (ai as any).definePrompt({
   name: 'createSchedulePrompt',
   input: {schema: CreateScheduleInputSchema},
   output: {schema: CreateScheduleOutputSchema},
@@ -87,13 +88,13 @@ const createSchedulePrompt = ai.definePrompt({
   `
 });
 
-const createScheduleFlow = ai.defineFlow(
+const createScheduleFlow = (ai as any).defineFlow(
   {
     name: 'createScheduleFlow',
     inputSchema: CreateScheduleInputSchema,
     outputSchema: CreateScheduleOutputSchema,
   },
-  async input => {
+  async (input: CreateScheduleInput) => {
     const {output} = await createSchedulePrompt(input);
     return output!;
   }

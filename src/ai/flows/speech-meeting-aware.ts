@@ -37,7 +37,8 @@ export async function speechMeetingAware(input: SpeechMeetingAwareInput): Promis
   return speechMeetingAwareFlow(input);
 }
 
-const generateChecklist = ai.defineTool({
+// NOTE: Genkit typings can differ by provider; cast to any to avoid TS overload conflicts.
+const generateChecklist = (ai as any).defineTool({
   name: 'generateChecklist',
   description: 'Generates a speaker checklist based on the event.',
   inputSchema: z.object({
@@ -45,7 +46,7 @@ const generateChecklist = ai.defineTool({
   }),
   outputSchema: z.string(),
 },
-async (input) => {
+async (input: { eventDetails: string }) => {
   // This can call any typescript function.
   // In a real implementation, this would generate the checklist.  Returning a placeholder for now.
   return `Speaker Checklist:\n1. Prepare speech notes.\n2. Practice presentation.\n3. Test equipment.`;
@@ -53,7 +54,7 @@ async (input) => {
 );
 
 
-const prompt = ai.definePrompt({
+const prompt = (ai as any).definePrompt({
   name: 'speechMeetingAwarePrompt',
   input: {schema: SpeechMeetingAwareInputSchema},
   output: {schema: SpeechMeetingAwareOutputSchema},
@@ -72,13 +73,13 @@ const prompt = ai.definePrompt({
 `,
 });
 
-const speechMeetingAwareFlow = ai.defineFlow(
+const speechMeetingAwareFlow = (ai as any).defineFlow(
   {
     name: 'speechMeetingAwareFlow',
     inputSchema: SpeechMeetingAwareInputSchema,
     outputSchema: SpeechMeetingAwareOutputSchema,
   },
-  async input => {
+  async (input: SpeechMeetingAwareInput) => {
     const {output} = await prompt(input);
     return output!;
   }

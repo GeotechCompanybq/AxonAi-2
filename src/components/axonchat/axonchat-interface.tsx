@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import Link from "next/link";
 import {
   Bot,
   Send,
@@ -13,6 +14,12 @@ import {
   Check,
   X,
   Plus,
+  ChevronLeft,
+  ChevronRight,
+  Settings,
+  Copy,
+  ThumbsDown,
+  ThumbsUp,
   Trash2,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -22,6 +29,23 @@ import { cn } from "@/lib/utils";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import {
   Dialog,
   DialogContent,
@@ -40,6 +64,8 @@ import type { Task } from "@/types";
 type ChatMessage = {
   role: "assistant" | "user" | "system";
   content: string;
+  reasoningTitle?: string;
+  reasoning?: string;
   timestamp: Date;
   metadata?: {
     type?: "task_created" | "timesheet_updated" | "analysis" | "error" | "pending_action";
@@ -66,17 +92,30 @@ type CustomQuickAction = {
   query: string;
 };
 
+type Tone = "none" | "concise" | "technical" | "executive";
+
 export function AxonChatInterface() {
   const { user } = useAuth();
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState("");
   const [isTyping, setIsTyping] = useState(false);
+  const [tone, setTone] = useState<Tone>("none");
+  const [toneSaving, setToneSaving] = useState(false);
+  const [feedbackByIndex, setFeedbackByIndex] = useState<Record<number, "up" | "down">>({});
   const [customActions, setCustomActions] = useState<CustomQuickAction[]>([]);
   const [customDialogOpen, setCustomDialogOpen] = useState(false);
   const [customLabel, setCustomLabel] = useState("");
   const [customQuery, setCustomQuery] = useState("");
   const [sessionId, setSessionId] = useState<string>("default");
   const [isLoadingHistory, setIsLoadingHistory] = useState(true);
+  const [contextOpen, setContextOpen] = useState(false);
+  const [isOnline, setIsOnline] = useState(true);
+  const [contextTasks, setContextTasks] = useState<any[]>([]);
+  const [snapshot, setSnapshot] = useState<{
+    loading: boolean;
+    hoursThisWeek: number | null;
+    meetingsToday: number | null;
+  }>({ loading: false, hoursThisWeek: null, meetingsToday: null });
   const [connections, setConnections] = useState<ConnectionStatus>({
     harvest: false,
     microsoft: false,
@@ -84,8 +123,13 @@ export function AxonChatInterface() {
     monday: false,
   });
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLTextAreaElement>(null);
   const saveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const sendInFlightRef = useRef(false);
+  const contextLoadRef = useRef<{ inFlight: boolean; lastAt: number }>({
+    inFlight: false,
+    lastAt: 0,
+  });
 
   const CUSTOM_ACTIONS_KEY = "axonchat_custom_actions_v1";
 
@@ -96,10 +140,67 @@ export function AxonChatInterface() {
     { label: "Analyze", icon: BarChart3, query: "Analyze my productivity" },
   ];
 
+  async function loadTone() {
+    const uid = (window as any).__AXON_UID__ || user?.uid;
+    if (!uid) return;
+    try {
+      const res = await fetch(`/api/axonchat/settings?uid=${encodeURIComponent(String(uid))}`, {
+        credentials: "include",
+      });
+      if (!res.ok) return;
+      const data = await res.json();
+      const t = String(data?.tone || "none").toLowerCase();
+      if (t === "concise" || t === "technical" || t === "executive" || t === "none") {
+        setTone(t as Tone);
+      }
+    } catch {}
+  }
+
+  async function saveTone(next: Tone) {
+    const uid = (window as any).__AXON_UID__ || user?.uid;
+    if (!uid) return;
+    setToneSaving(true);
+    try {
+      await fetch(`/api/axonchat/settings?uid=${encodeURIComponent(String(uid))}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ tone: next }),
+      });
+    } finally {
+      setToneSaving(false);
+    }
+  }
+
   // Load chat history on mount
   useEffect(() => {
     loadChatHistory();
     checkConnections();
+    loadTone();
+  }, []);
+
+  // Load context panel data when connections become available
+  useEffect(() => {
+    void loadContextPanelData();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [
+    connections.harvest,
+    connections.microsoft,
+    connections.jira,
+    connections.monday,
+  ]);
+
+  // Online/offline status
+  useEffect(() => {
+    setIsOnline(typeof navigator !== "undefined" ? navigator.onLine : true);
+    const on = () => setIsOnline(true);
+    const off = () => setIsOnline(false);
+    window.addEventListener("online", on);
+    window.addEventListener("offline", off);
+    return () => {
+      window.removeEventListener("online", on);
+      window.removeEventListener("offline", off);
+    };
   }, []);
 
   // Load custom quick actions
@@ -241,6 +342,8 @@ What would you like to do?`,
             messages: messages.map((msg) => ({
               role: msg.role,
               content: msg.content,
+              reasoningTitle: msg.reasoningTitle,
+              reasoning: msg.reasoning,
               timestamp: msg.timestamp,
               metadata: msg.metadata,
             })),
@@ -306,6 +409,88 @@ What would you like to do?`,
     }
   }
 
+  async function loadContextPanelData() {
+    const uid = (window as any).__AXON_UID__ || user?.uid;
+    if (!uid) return;
+
+    // Throttle background loads (avoid spamming APIs while user types)
+    const now = Date.now();
+    if (contextLoadRef.current.inFlight) return;
+    if (now - contextLoadRef.current.lastAt < 20_000) return;
+    contextLoadRef.current.inFlight = true;
+    contextLoadRef.current.lastAt = now;
+
+    try {
+      // Tasks
+      const local = getTasksFromLocalStorage();
+      const jiraTasks: any[] = [];
+      const mondayTasks: any[] = [];
+
+      await Promise.all([
+        connections.jira
+          ? fetch(`/api/jira/tasks?uid=${uid}`, { credentials: "include" })
+              .then((r) => (r.ok ? r.json() : { tasks: [] }))
+              .then((d) => jiraTasks.push(...(d.tasks || [])))
+              .catch(() => {})
+          : Promise.resolve(),
+        connections.monday
+          ? fetch(`/api/monday/tasks?uid=${uid}`, { credentials: "include" })
+              .then((r) => (r.ok ? r.json() : { tasks: [] }))
+              .then((d) => mondayTasks.push(...(d.tasks || [])))
+              .catch(() => {})
+          : Promise.resolve(),
+      ]);
+
+      const combinedTasks = [...local, ...jiraTasks, ...mondayTasks];
+      setContextTasks(combinedTasks.slice(0, 20));
+
+      // Snapshot
+      setSnapshot((s) => ({ ...s, loading: true }));
+      const weekFrom = getWeekStart();
+      const today = getToday();
+      const startOfToday = new Date();
+      startOfToday.setHours(0, 0, 0, 0);
+      const endOfToday = new Date(startOfToday);
+      endOfToday.setDate(endOfToday.getDate() + 1);
+
+      const [timesheetsRes, calendarRes] = await Promise.all([
+        connections.harvest
+          ? fetch(`/api/harvest/timesheets?uid=${uid}&from=${weekFrom}&to=${today}`, {
+              credentials: "include",
+            })
+              .then((r) => (r.ok ? r.json() : { timeEntries: [] }))
+              .catch(() => ({ timeEntries: [] }))
+          : Promise.resolve({ timeEntries: [] }),
+        connections.microsoft
+          ? fetch(
+              `/api/microsoft/calendar?uid=${uid}&start=${startOfToday.toISOString()}&end=${endOfToday.toISOString()}`,
+              { credentials: "include" }
+            )
+              .then((r) => (r.ok ? r.json() : { events: [] }))
+              .catch(() => ({ events: [] }))
+          : Promise.resolve({ events: [] }),
+      ]);
+
+      const hoursThisWeek = Array.isArray(timesheetsRes?.timeEntries)
+        ? timesheetsRes.timeEntries.reduce(
+            (sum: number, e: any) => sum + (Number(e?.hours) || 0),
+            0
+          )
+        : 0;
+      const meetingsToday = Array.isArray(calendarRes?.events)
+        ? calendarRes.events.length
+        : 0;
+
+      setSnapshot({
+        loading: false,
+        hoursThisWeek: connections.harvest ? Number(hoursThisWeek) : null,
+        meetingsToday: connections.microsoft ? Number(meetingsToday) : null,
+      });
+    } finally {
+      contextLoadRef.current.inFlight = false;
+    }
+  }
+
   async function handleSend(explicitText?: string) {
     const trimmed = (explicitText ?? input).trim();
     if (!trimmed || isTyping || sendInFlightRef.current) return;
@@ -322,8 +507,27 @@ What would you like to do?`,
     setIsTyping(true);
 
     try {
+      const lower = trimmed.toLowerCase();
+      if (lower === "/retry") {
+        await checkConnections();
+        await loadContextPanelData();
+        setMessages((prev) => [
+          ...prev,
+          {
+            role: "assistant",
+            content: "Done — I retried connections and refreshed your context panel.",
+            timestamp: new Date(),
+            metadata: { type: "analysis" },
+          },
+        ]);
+        return;
+      }
+
+      const routed =
+        trimmed.startsWith("/") ? routeSlashCommand(trimmed) : trimmed;
+
       // Parse intent and route to appropriate handler
-      const response = await handleUserQuery(trimmed);
+      const response = await handleUserQuery(routed);
       
       // handleAIChat already adds messages during streaming (isStreaming flag)
       // For other handlers, add the message directly
@@ -348,6 +552,22 @@ What would you like to do?`,
       setIsTyping(false);
       sendInFlightRef.current = false;
     }
+  }
+
+  function routeSlashCommand(text: string): string {
+    const raw = text.trim();
+    if (!raw.startsWith("/")) return raw;
+    const [cmdRaw, ...rest] = raw.slice(1).split(/\s+/);
+    const cmd = String(cmdRaw || "").toLowerCase();
+    const arg = rest.join(" ").trim();
+    if (cmd === "task") return `Create a task: ${arg || "Untitled task"}`;
+    if (cmd === "summarize")
+      return "Summarize our recent conversation in 5 bullets, then suggest 3 next actions.";
+    if (cmd === "plan")
+      return "Help me plan my day. Ask one clarifying question if needed, then propose a short prioritized plan.";
+    if (cmd === "error")
+      return `Help me debug this error. If unclear, ask one question first.\n\n${arg}`;
+    return raw; // unknown command: send as-is
   }
 
   const allQuickActions = useMemo(() => {
@@ -530,33 +750,34 @@ What would you like to do?`,
       const inProgress = tasks.filter((t) => t.status === "inprogress").length;
       const done = tasks.filter((t) => t.status === "done").length;
 
-      let content = `📋 **Your Tasks**\n\n`;
-      content += `**Local Tasks**: ${tasks.length} total\n`;
-      content += `- To Do: ${todoTasks}\n`;
-      content += `- In Progress: ${inProgress}\n`;
-      content += `- Done: ${done}\n\n`;
+      let content = `## 📋 Your tasks\n\n`;
+      content += `### Local\n`;
+      content += `- **Total**: ${tasks.length}\n`;
+      content += `- **To do**: ${todoTasks}\n`;
+      content += `- **In progress**: ${inProgress}\n`;
+      content += `- **Done**: ${done}\n\n`;
 
       if (jiraTasks.length > 0) {
-        content += `**Jira**: ${jiraTasks.length} tasks\n`;
+        content += `- **Jira**: ${jiraTasks.length}\n`;
       }
       if (mondayTasks.length > 0) {
-        content += `**Monday.com**: ${mondayTasks.length} tasks\n`;
+        content += `- **Monday.com**: ${mondayTasks.length}\n`;
       }
 
       if (errors.length > 0) {
-        content += `\n⚠️ **Issues:**\n`;
+        content += `\n### ⚠️ Issues\n`;
         errors.forEach((err) => {
           content += `- ${err}\n`;
         });
       }
 
       if (totalTasks === 0 && errors.length === 0) {
-        content += `\nNo tasks found. Would you like me to create one?`;
+        content += `\nNo tasks found. Want me to create one?`;
       } else if (totalTasks > 0) {
-        content += `\n**Recent Tasks:**\n`;
+        content += `\n### Recent\n`;
         tasks.slice(-5).forEach((task) => {
           const status = task.status === "done" ? "✅" : task.status === "inprogress" ? "🔄" : "📝";
-          content += `${status} ${task.name}\n`;
+          content += `- ${status} ${task.name}\n`;
         });
       }
 
@@ -602,18 +823,20 @@ What would you like to do?`,
       const entries = data.timeEntries || [];
       const totalHours = entries.reduce((sum: number, e: any) => sum + (Number(e.hours) || 0), 0);
 
-      let content = `📊 **Your Timesheets (This Week)**\n\n`;
-      content += `**Total Hours**: ${totalHours.toFixed(1)}h\n`;
-      content += `**Entries**: ${entries.length}\n\n`;
+      let content = `## 📊 Your Timesheets (This Week)\n\n`;
+      content += `- **Total hours**: ${totalHours.toFixed(1)}h\n`;
+      content += `- **Entries**: ${entries.length}\n\n`;
 
       if (entries.length > 0) {
-        content += `**Recent Entries:**\n`;
+        content += `### Recent entries\n`;
         entries.slice(0, 5).forEach((entry: any) => {
           const project = entry.project?.name || "Unknown";
           const task = entry.task?.name || "Unknown";
-          content += `• ${entry.spent_date}: ${entry.hours}h - ${project} / ${task}\n`;
+          content += `- **${entry.spent_date}** — ${entry.hours}h · ${project} / ${task}\n`;
           if (entry.notes) {
-            content += `  _${entry.notes.substring(0, 50)}${entry.notes.length > 50 ? "..." : ""}_\n`;
+            content += `  - _${entry.notes.substring(0, 70)}${
+              entry.notes.length > 70 ? "…" : ""
+            }_\n`;
           }
         });
       } else {
@@ -892,15 +1115,31 @@ What would you like to do?`,
     
     setMessages((prev) => [...prev, streamingMessage]);
 
-    try {
-      const controller = new AbortController();
-      const timeoutId = window.setTimeout(() => controller.abort(), 45_000);
+    const controller = new AbortController();
+    let timeoutId: number | undefined;
 
-      const res = await fetch("/api/chat/stream", {
+    try {
+      timeoutId = window.setTimeout(() => controller.abort(), 45_000);
+
+      const uid = (window as any).__AXON_UID__ || user?.uid;
+      const qs = uid ? `?uid=${encodeURIComponent(String(uid))}` : "";
+      const res = await fetch(`/api/chat/stream${qs}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         signal: controller.signal,
         body: JSON.stringify({
+          contextText: (() => {
+            const connected = Object.entries(connections)
+              .filter(([, v]) => Boolean(v))
+              .map(([k]) => k);
+            const focus = focusItems.slice(0, 3).map((t) => t.title).filter(Boolean);
+            const parts: string[] = [];
+            parts.push(`ConnectedApps: ${connected.length ? connected.join(", ") : "none"}`);
+            if (snapshot.hoursThisWeek != null) parts.push(`HoursThisWeek: ${snapshot.hoursThisWeek.toFixed(1)}`);
+            if (snapshot.meetingsToday != null) parts.push(`MeetingsToday: ${snapshot.meetingsToday}`);
+            if (focus.length) parts.push(`TopTasks: ${focus.join(" | ")}`);
+            return parts.join("\n");
+          })(),
           messages: messages
             .filter((m) => m.role !== "system" && !m.isStreaming)
             .map((m) => ({ role: m.role, content: m.content }))
@@ -937,6 +1176,73 @@ What would you like to do?`,
         throw new Error("No response body");
       }
 
+      const processSsePart = (part: string) => {
+        const dataLine = part
+          .split("\n")
+          .find((l) => l.startsWith("data:"));
+        if (!dataLine) return;
+
+        const raw = dataLine.replace(/^data:\s?/, "").trim();
+        if (!raw) return;
+
+        const data = JSON.parse(raw) as any;
+
+        if (data?.error) {
+          throw new Error(String(data.error));
+        }
+
+          if (typeof data?.reasoningTitle === "string" || typeof data?.reasoning === "string") {
+            setMessages((prev) => {
+              const updated = [...prev];
+              const lastIndex = updated.length - 1;
+              if (lastIndex >= 0 && updated[lastIndex].isStreaming) {
+                updated[lastIndex] = {
+                  ...updated[lastIndex],
+                  reasoningTitle:
+                    typeof data.reasoningTitle === "string"
+                      ? data.reasoningTitle
+                      : updated[lastIndex].reasoningTitle,
+                  reasoning:
+                    typeof data.reasoning === "string"
+                      ? data.reasoning
+                      : updated[lastIndex].reasoning,
+                };
+              }
+              return updated;
+            });
+          }
+
+        if (typeof data?.content === "string" && data.content.length > 0) {
+          fullContent += data.content;
+          setMessages((prev) => {
+            const updated = [...prev];
+            const lastIndex = updated.length - 1;
+            if (lastIndex >= 0 && updated[lastIndex].isStreaming) {
+              updated[lastIndex] = {
+                ...updated[lastIndex],
+                content: fullContent,
+              };
+            }
+            return updated;
+          });
+        }
+
+        if (data?.done) {
+          setMessages((prev) => {
+            const updated = [...prev];
+            const lastIndex = updated.length - 1;
+            if (lastIndex >= 0 && updated[lastIndex].isStreaming) {
+              updated[lastIndex] = {
+                ...updated[lastIndex],
+                content: fullContent || "…",
+                isStreaming: false,
+              };
+            }
+            return updated;
+          });
+        }
+      };
+
       while (true) {
         const { done, value } = await reader.read();
         if (done) break;
@@ -948,53 +1254,19 @@ What would you like to do?`,
         buffer = parts.pop() || "";
 
         for (const part of parts) {
-          const dataLine = part
-            .split("\n")
-            .find((l) => l.startsWith("data:"));
-          if (!dataLine) continue;
-
-          const raw = dataLine.replace(/^data:\s?/, "").trim();
-          if (!raw) continue;
-
-          const data = JSON.parse(raw) as any;
-
-          if (data?.error) {
-            throw new Error(String(data.error));
-          }
-
-          if (typeof data?.content === "string" && data.content.length > 0) {
-            fullContent += data.content;
-            setMessages((prev) => {
-              const updated = [...prev];
-              const lastIndex = updated.length - 1;
-              if (lastIndex >= 0 && updated[lastIndex].isStreaming) {
-                updated[lastIndex] = {
-                  ...updated[lastIndex],
-                  content: fullContent,
-                };
-              }
-              return updated;
-            });
-          }
-
-          if (data?.done) {
-            setMessages((prev) => {
-              const updated = [...prev];
-              const lastIndex = updated.length - 1;
-              if (lastIndex >= 0 && updated[lastIndex].isStreaming) {
-                updated[lastIndex] = {
-                  ...updated[lastIndex],
-                  content: fullContent || "…",
-                  isStreaming: false,
-                };
-              }
-              return updated;
-            });
-          }
+          processSsePart(part);
         }
       }
 
-      window.clearTimeout(timeoutId);
+      // Flush any remaining decoder bytes and process any remaining (non-terminated) SSE data
+      buffer += decoder.decode();
+      if (buffer.trim()) {
+        try {
+          processSsePart(buffer);
+        } catch {
+          // Best-effort: if the final chunk is truncated/malformed, don't fail the whole request
+        }
+      }
 
       // Return with isStreaming flag to prevent duplicate addition
       return {
@@ -1014,6 +1286,8 @@ What would you like to do?`,
         }`,
         metadata: { type: "error" },
       };
+    } finally {
+      if (typeof timeoutId === "number") window.clearTimeout(timeoutId);
     }
   }
 
@@ -1201,316 +1475,801 @@ What would you like to do?`,
     return new Date().toISOString().slice(0, 10);
   }
 
+  const connectedCount = Object.values(connections).filter(Boolean).length;
+  const status =
+    !isOnline
+      ? { label: "Offline", dot: "bg-red-500" }
+      : connectedCount === 4
+        ? { label: "Connected", dot: "bg-emerald-500" }
+        : connectedCount > 0
+          ? { label: "Partial", dot: "bg-amber-500" }
+          : { label: "Offline", dot: "bg-red-500" };
+
+  const normalizedTasks = (contextTasks || []).map((t: any) => ({
+    id: String(t?.id || t?.key || t?._id || ""),
+    title: String(t?.name || t?.summary || t?.title || t?.subject || "Untitled"),
+    status: String(t?.status || ""),
+    source: String(t?.source || t?.platform || t?.provider || ""),
+  }));
+  const focusItems = normalizedTasks
+    .filter((t) => !t.status || t.status === "todo" || t.status === "inprogress")
+    .slice(0, 3);
+  const activeItems = normalizedTasks
+    .filter((t) => !t.status || t.status !== "done")
+    .slice(0, 5);
+
+  const recentActions = messages
+    .filter(
+      (m) =>
+        m.role === "assistant" &&
+        (m.metadata?.type === "task_created" ||
+          m.metadata?.type === "timesheet_updated" ||
+          m.metadata?.type === "pending_action")
+    )
+    .slice(-5)
+    .reverse();
+
+  const disconnectedApps = [
+    !connections.harvest ? "Harvest" : null,
+    !connections.microsoft ? "Microsoft" : null,
+    !connections.jira ? "Jira" : null,
+    !connections.monday ? "Monday.com" : null,
+  ].filter(Boolean) as string[];
+
   return (
-    <div className="flex flex-col h-[calc(100vh-8rem)] max-h-[800px]">
-      {/* Header */}
-      <div className="flex items-center justify-between p-4 border-b">
-        <div className="flex items-center gap-3">
-          <div className="p-2 rounded-lg bg-primary/10">
+    <div className="flex flex-col h-[calc(100vh-8rem)] min-h-[620px] border rounded-lg overflow-hidden bg-background">
+      {/* Top Bar */}
+      <div className="flex items-center justify-between px-4 py-2 border-b bg-background/80 backdrop-blur">
+        <div className="flex items-center gap-3 min-w-0">
+          <div className="p-2 rounded-lg bg-primary/10 shrink-0">
             <Sparkles className="h-5 w-5 text-primary" />
           </div>
-          <div>
-            <h1 className="text-xl font-bold">AxonChat</h1>
-            <p className="text-sm text-muted-foreground">AI Assistant for Your Work</p>
+          <div className="min-w-0">
+            <div className="flex items-center gap-2">
+              <h1 className="text-base font-semibold truncate">AxonChat</h1>
+              <span className="inline-flex items-center gap-1.5 text-xs text-muted-foreground">
+                <span className={cn("h-2 w-2 rounded-full", status.dot)} />
+                {status.label}
+              </span>
+            </div>
+            <p className="text-xs text-muted-foreground truncate">
+              AI Assistant for Your Work
+            </p>
           </div>
         </div>
-        <div className="flex gap-2 items-center">
-          {connections.harvest && (
-            <div className="flex items-center gap-1.5 px-2 py-1 rounded-md border bg-background">
-              <img 
-                src="/Intergrations/Harvest-New.png" 
-                alt="Harvest" 
+
+        <div className="flex items-center gap-2">
+          {/* Tone selector */}
+          <div className="hidden md:block">
+            <Select
+              value={tone}
+              onValueChange={(v) => {
+                const next = v as Tone;
+                setTone(next);
+                void saveTone(next);
+              }}
+            >
+              <SelectTrigger className="h-8 w-[150px]" disabled={toneSaving}>
+                <SelectValue placeholder="Tone" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="none">Default tone</SelectItem>
+                <SelectItem value="concise">Concise</SelectItem>
+                <SelectItem value="technical">Technical</SelectItem>
+                <SelectItem value="executive">Executive</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+
+          {/* Integration icons (dim when disconnected) */}
+          <div className="hidden sm:flex items-center gap-2">
+            <div
+              className={cn(
+                "flex items-center gap-1.5 px-2 py-1 rounded-md border bg-background",
+                connections.harvest ? "opacity-100" : "opacity-40"
+              )}
+              title={connections.harvest ? "Harvest connected" : "Harvest disconnected"}
+            >
+              <img
+                src="/Intergrations/Harvest-New.png"
+                alt="Harvest"
                 className="h-5 w-auto object-contain"
               />
             </div>
-          )}
-          {connections.microsoft && (
-            <div className="flex items-center gap-1.5 px-2 py-1 rounded-md border bg-background">
-              <img 
-                src="/Intergrations/microsoft.png" 
-                alt="Microsoft" 
+            <div
+              className={cn(
+                "flex items-center gap-1.5 px-2 py-1 rounded-md border bg-background",
+                connections.microsoft ? "opacity-100" : "opacity-40"
+              )}
+              title={connections.microsoft ? "Microsoft connected" : "Microsoft disconnected"}
+            >
+              <img
+                src="/Intergrations/microsoft.png"
+                alt="Microsoft"
                 className="h-5 w-auto object-contain"
               />
             </div>
-          )}
-          {connections.jira && (
-            <div className="flex items-center gap-1.5 px-2 py-1 rounded-md border bg-background">
-              <img 
-                src="/Intergrations/jira-software.png" 
-                alt="Jira" 
+            <div
+              className={cn(
+                "flex items-center gap-1.5 px-2 py-1 rounded-md border bg-background",
+                connections.jira ? "opacity-100" : "opacity-40"
+              )}
+              title={connections.jira ? "Jira connected" : "Jira disconnected"}
+            >
+              <img
+                src="/Intergrations/jira-software.png"
+                alt="Jira"
                 className="h-5 w-auto object-contain"
               />
             </div>
-          )}
-          {connections.monday && (
-            <div className="flex items-center gap-1.5 px-2 py-1 rounded-md border bg-background">
-              <img 
-                src="/Intergrations/monday.png" 
-                alt="Monday.com" 
+            <div
+              className={cn(
+                "flex items-center gap-1.5 px-2 py-1 rounded-md border bg-background",
+                connections.monday ? "opacity-100" : "opacity-40"
+              )}
+              title={connections.monday ? "Monday connected" : "Monday disconnected"}
+            >
+              <img
+                src="/Intergrations/monday.png"
+                alt="Monday.com"
                 className="h-5 w-auto object-contain"
               />
             </div>
-          )}
+          </div>
+
+          <Button asChild variant="ghost" size="icon" className="shrink-0" title="Settings">
+            <Link href="/settings">
+              <Settings className="h-4 w-4" />
+            </Link>
+          </Button>
+
+          <Avatar className="h-8 w-8">
+            <AvatarImage src={(user as any)?.photoURL || ""} alt={(user as any)?.displayName || "User"} />
+            <AvatarFallback>
+              {String((user as any)?.displayName || "U")
+                .trim()
+                .slice(0, 1)
+                .toUpperCase()}
+            </AvatarFallback>
+          </Avatar>
         </div>
       </div>
 
-      {/* Messages */}
-      <ScrollArea className="flex-1 p-4">
-        <div className="space-y-4">
-          {messages.map((msg, idx) => (
-            <div
-              key={idx}
-              className={cn(
-                "flex gap-3",
-                msg.role === "user" ? "justify-end" : "justify-start"
-              )}
-            >
-              {msg.role === "assistant" && (
-                <div className="p-2 rounded-full bg-primary/10 shrink-0">
-                  <Bot className="h-4 w-4 text-primary" />
-                </div>
-              )}
-              <Card
-                className={cn(
-                  "max-w-[80%]",
-                  msg.role === "user"
-                    ? "bg-primary text-primary-foreground"
-                    : "bg-muted"
-                )}
+      {/* Body */}
+      <div className="flex flex-1 min-h-0">
+        {/* Context panel */}
+        {contextOpen ? (
+          <aside className="w-80 border-r bg-muted/10 min-h-0 flex flex-col">
+            <div className="flex items-center justify-between px-3 py-2 border-b">
+              <div className="text-sm font-medium text-muted-foreground">Context</div>
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={() => setContextOpen(false)}
+                title="Collapse context"
               >
-                <CardContent className="p-4">
-                  <div className="whitespace-pre-wrap text-sm prose prose-sm dark:prose-invert max-w-none">
-                    {msg.content.split('\n').map((line, i) => {
-                      // Simple markdown-like rendering
-                      if (line.startsWith('**') && line.endsWith('**')) {
-                        return <strong key={i}>{line.slice(2, -2)}</strong>;
-                      }
-                      if (line.startsWith('✅') || line.startsWith('❌') || line.startsWith('⚠️')) {
-                        return <div key={i} className="font-semibold">{line}</div>;
-                      }
-                      if (line.startsWith('•') || line.startsWith('-')) {
-                        return <div key={i} className="ml-4">{line}</div>;
-                      }
-                      return <div key={i}>{line || '\u00A0'}</div>;
-                    })}
-                    {msg.isStreaming && (
-                      <span className="inline-block w-2 h-4 ml-1 bg-primary animate-pulse" />
+                <ChevronLeft className="h-4 w-4" />
+              </Button>
+            </div>
+            <ScrollArea className="flex-1">
+              <div className="p-3 space-y-3">
+                <Card>
+                  <CardContent className="p-3">
+                    <div className="text-xs font-semibold text-muted-foreground mb-2">Today’s Focus</div>
+                    {focusItems.length > 0 ? (
+                      <div className="space-y-1">
+                        {focusItems.map((t) => (
+                          <div key={t.id || t.title} className="text-sm">
+                            • {t.title}
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <div className="text-sm text-muted-foreground">
+                        Ask: “What should I do today?” and I’ll turn it into a short focus list.
+                      </div>
                     )}
-                  </div>
-                  {msg.metadata?.type === "task_created" && (
-                    <div className="mt-2 text-xs opacity-70 flex items-center gap-1">
-                      <span>✅</span>
-                      <span>Task added to your list</span>
+                  </CardContent>
+                </Card>
+                <Card>
+                  <CardContent className="p-3">
+                    <div className="text-xs font-semibold text-muted-foreground mb-2">Active Tasks</div>
+                    {activeItems.length > 0 ? (
+                      <div className="space-y-1">
+                        {activeItems.map((t) => (
+                          <div key={t.id || t.title} className="text-sm flex items-start justify-between gap-2">
+                            <span className="truncate">• {t.title}</span>
+                            {t.source ? (
+                              <span className="text-[11px] text-muted-foreground shrink-0">
+                                {t.source}
+                              </span>
+                            ) : null}
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <div className="text-sm text-muted-foreground">
+                        No tasks loaded yet. Ask: “Show my tasks”.
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
+                <Card>
+                  <CardContent className="p-3">
+                    <div className="text-xs font-semibold text-muted-foreground mb-2">Recent Activity</div>
+                    {recentActions.length > 0 ? (
+                      <div className="space-y-1">
+                        {recentActions.map((m, i) => (
+                          <div key={i} className="text-sm text-muted-foreground">
+                            •{" "}
+                            {m.metadata?.type === "task_created"
+                              ? "Created a task"
+                              : m.metadata?.type === "timesheet_updated"
+                                ? "Prepared a timesheet update"
+                                : "Pending approval requested"}
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <div className="text-sm text-muted-foreground">
+                        Actions like “created task” and “updated timesheet” will show up here.
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
+                <Card>
+                  <CardContent className="p-3">
+                    <div className="text-xs font-semibold text-muted-foreground mb-2">
+                      Productivity Snapshot
                     </div>
-                  )}
-                  {msg.metadata?.type === "timesheet_updated" && (
-                    <div className="mt-2 text-xs opacity-70 flex items-center gap-1">
-                      <span>✅</span>
-                      <span>Timesheet updated</span>
+                    <div className="space-y-1 text-sm">
+                      <div className="flex items-center justify-between gap-3">
+                        <span className="text-muted-foreground">Time logged (week)</span>
+                        <span>
+                          {snapshot.loading ? (
+                            <span className="text-muted-foreground">…</span>
+                          ) : snapshot.hoursThisWeek == null ? (
+                            <span className="text-muted-foreground">Connect Harvest</span>
+                          ) : (
+                            `${snapshot.hoursThisWeek.toFixed(1)}h`
+                          )}
+                        </span>
+                      </div>
+                      <div className="flex items-center justify-between gap-3">
+                        <span className="text-muted-foreground">Meetings today</span>
+                        <span>
+                          {snapshot.loading ? (
+                            <span className="text-muted-foreground">…</span>
+                          ) : snapshot.meetingsToday == null ? (
+                            <span className="text-muted-foreground">Connect Microsoft</span>
+                          ) : (
+                            `${snapshot.meetingsToday}`
+                          )}
+                        </span>
+                      </div>
                     </div>
-                  )}
-                  {msg.metadata?.type === "pending_action" && msg.metadata.pendingAction && (
-                    <div className="mt-3 pt-3 border-t flex gap-2">
-                      <Button
-                        size="sm"
-                        onClick={async () => {
-                          await msg.metadata!.pendingAction!.action();
-                          // Remove pending action from message
-                          setMessages((prev) => {
-                            const updated = [...prev];
-                            updated[idx] = {
-                              ...updated[idx],
-                              metadata: {
-                                ...updated[idx].metadata,
-                                type: undefined,
-                                pendingAction: undefined,
-                              },
-                            };
-                            return updated;
-                          });
-                        }}
-                        className="gap-2"
-                      >
-                        <Check className="h-3.5 w-3.5" />
-                        Approve
-                      </Button>
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        onClick={() => {
-                          // Remove pending action from message
-                          setMessages((prev) => {
-                            const updated = [...prev];
-                            updated[idx] = {
-                              ...updated[idx],
-                              metadata: {
-                                ...updated[idx].metadata,
-                                type: undefined,
-                                pendingAction: undefined,
-                              },
-                            };
-                            return updated;
-                          });
-                        }}
-                        className="gap-2"
-                      >
-                        <X className="h-3.5 w-3.5" />
-                        Decline
-                      </Button>
+                  </CardContent>
+                </Card>
+                <Card>
+                  <CardContent className="p-3">
+                    <div className="text-xs font-semibold text-muted-foreground mb-2">System Notices</div>
+                    <div className="space-y-2">
+                      {!isOnline ? (
+                        <div className="text-sm text-muted-foreground">
+                          You’re offline. Some integrations may fail until you reconnect.
+                        </div>
+                      ) : disconnectedApps.length > 0 ? (
+                        <div className="text-sm text-muted-foreground">
+                          Disconnected: {disconnectedApps.join(", ")}.
+                        </div>
+                      ) : (
+                        <div className="text-sm text-muted-foreground">
+                          All integrations look good.
+                        </div>
+                      )}
+                      <div className="flex items-center gap-2">
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => void checkConnections()}
+                          className="shrink-0"
+                        >
+                          Retry
+                        </Button>
+                        <Button asChild size="sm" variant="ghost">
+                          <Link href="/settings">Open Settings</Link>
+                        </Button>
+                      </div>
                     </div>
-                  )}
-                </CardContent>
-              </Card>
-              {msg.role === "user" && (
-                <div className="p-2 rounded-full bg-primary shrink-0">
-                  <div className="h-4 w-4 rounded-full bg-primary-foreground" />
-                </div>
-              )}
-            </div>
-          ))}
-          {isTyping && (
-            <div className="flex gap-3 justify-start">
-              <div className="p-2 rounded-full bg-primary/10 shrink-0">
-                <Bot className="h-4 w-4 text-primary" />
+                  </CardContent>
+                </Card>
               </div>
-              <Card className="bg-muted max-w-[80%]">
-                <CardContent className="p-4">
-                  <div className="flex items-center gap-2">
-                    <IconSpinner className="h-4 w-4" />
-                    <span className="text-sm text-muted-foreground">Thinking...</span>
-                  </div>
-                </CardContent>
-              </Card>
-            </div>
-          )}
-          <div ref={messagesEndRef} />
-        </div>
-      </ScrollArea>
-
-      {/* Quick Actions */}
-      <div className="p-4 border-t bg-muted/30">
-        <div className="flex flex-wrap gap-2 mb-3">
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => {
-              setCustomDialogOpen(true);
-            }}
-            className="gap-2"
-          >
-            <Plus className="h-3.5 w-3.5" />
-            Custom
-          </Button>
-          {allQuickActions.map((action) => (
+            </ScrollArea>
+          </aside>
+        ) : (
+          <aside className="w-12 border-r bg-muted/10 flex flex-col items-center py-2">
             <Button
-              key={action.id}
-              variant="outline"
-              size="sm"
-              onClick={() => {
-                // send immediately without relying on input state update timing
-                void handleSend(action.query);
-              }}
-              className="gap-2"
+              variant="ghost"
+              size="icon"
+              onClick={() => setContextOpen(true)}
+              title="Open context"
             >
-              <action.icon className="h-3.5 w-3.5" />
-              {action.label}
-              {"isCustom" in action && action.isCustom ? (
-                <button
-                  type="button"
-                  className="ml-1 opacity-70 hover:opacity-100"
-                  title="Remove custom message"
-                  onClick={(e) => {
-                    e.preventDefault();
-                    e.stopPropagation();
-                    setCustomActions((prev) => prev.filter((x) => x.id !== action.id));
-                  }}
-                >
-                  <Trash2 className="h-3.5 w-3.5" />
-                </button>
-              ) : null}
+              <ChevronRight className="h-4 w-4" />
             </Button>
-          ))}
-        </div>
+          </aside>
+        )}
 
-        <Dialog open={customDialogOpen} onOpenChange={setCustomDialogOpen}>
-          <DialogContent className="sm:max-w-lg">
-            <DialogHeader>
-              <DialogTitle>Add custom message</DialogTitle>
-            </DialogHeader>
-            <div className="space-y-3">
-              <div className="space-y-1.5">
-                <div className="text-sm font-medium">Button label</div>
-                <Input
-                  value={customLabel}
-                  onChange={(e) => setCustomLabel(e.target.value)}
-                  placeholder="e.g., Weekly meetings?"
-                />
-              </div>
-              <div className="space-y-1.5">
-                <div className="text-sm font-medium">Message</div>
-                <Textarea
-                  value={customQuery}
-                  onChange={(e) => setCustomQuery(e.target.value)}
-                  placeholder="What do you want AxonChat to send when you click it?"
-                  className="min-h-[120px]"
-                />
+        {/* Chat column */}
+        <div className="flex flex-col flex-1 min-h-0">
+          {/* Messages */}
+          <ScrollArea className="flex-1">
+            <div className="p-4">
+              <div className="mx-auto w-full max-w-[680px] space-y-4">
+                {messages.map((msg, idx) => (
+                  <div
+                    key={idx}
+                    className={cn(
+                      "w-full flex",
+                      msg.role === "user" ? "justify-end" : "justify-start"
+                    )}
+                  >
+                    <div
+                      className={cn(
+                        "flex gap-3 w-full max-w-[680px]",
+                        msg.role === "user" ? "flex-row-reverse" : "flex-row"
+                      )}
+                    >
+                      {msg.role === "assistant" ? (
+                        <div className="p-2 rounded-full bg-primary/10 shrink-0 mt-1">
+                          <Bot className="h-4 w-4 text-primary" />
+                        </div>
+                      ) : (
+                        <div className="p-2 rounded-full bg-primary shrink-0 mt-1">
+                          <div className="h-4 w-4 rounded-full bg-primary-foreground" />
+                        </div>
+                      )}
+
+                      <Card
+                        className={cn(
+                          "relative group w-fit max-w-[calc(680px-3.25rem)]",
+                          msg.role === "user"
+                            ? "bg-primary text-primary-foreground"
+                            : "bg-muted"
+                        )}
+                      >
+                        <CardContent className="p-4">
+                          {msg.role === "assistant" && !msg.isStreaming ? (
+                            <div className="absolute top-2 right-2 hidden group-hover:flex items-center gap-1">
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                size="icon"
+                                className="h-7 w-7"
+                                title="Copy"
+                                onClick={async () => {
+                                  try {
+                                    await navigator.clipboard.writeText(msg.content || "");
+                                  } catch {
+                                    // ignore
+                                  }
+                                }}
+                              >
+                                <Copy className="h-3.5 w-3.5" />
+                              </Button>
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                size="icon"
+                                className={cn(
+                                  "h-7 w-7",
+                                  feedbackByIndex[idx] === "up" && "bg-accent"
+                                )}
+                                title="Helpful"
+                                onClick={() =>
+                                  setFeedbackByIndex((prev) => ({ ...prev, [idx]: "up" }))
+                                }
+                              >
+                                <ThumbsUp className="h-3.5 w-3.5" />
+                              </Button>
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                size="icon"
+                                className={cn(
+                                  "h-7 w-7",
+                                  feedbackByIndex[idx] === "down" && "bg-accent"
+                                )}
+                                title="Not helpful"
+                                onClick={() =>
+                                  setFeedbackByIndex((prev) => ({ ...prev, [idx]: "down" }))
+                                }
+                              >
+                                <ThumbsDown className="h-3.5 w-3.5" />
+                              </Button>
+                            </div>
+                          ) : null}
+
+                          {msg.role === "assistant" &&
+                          (msg.reasoningTitle || msg.reasoning) ? (
+                            <div className="mb-3 rounded-md border bg-background/40 p-3">
+                              <div className="text-[11px] text-muted-foreground mb-1">
+                                Reasoning
+                              </div>
+                              {msg.reasoningTitle ? (
+                                <div className="text-sm font-semibold mb-1">
+                                  {msg.reasoningTitle}
+                                </div>
+                              ) : null}
+                              {msg.reasoning ? (
+                                <div className="text-sm text-muted-foreground">
+                                  <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                                    {msg.reasoning}
+                                  </ReactMarkdown>
+                                </div>
+                              ) : null}
+                            </div>
+                          ) : null}
+
+                          <div
+                            className={cn(
+                              "text-sm leading-relaxed",
+                              msg.role === "user"
+                                ? "text-primary-foreground"
+                                : "text-foreground"
+                            )}
+                          >
+                            <ReactMarkdown
+                              remarkPlugins={[remarkGfm]}
+                              components={{
+                                h1: ({ children }) => (
+                                  <div className="text-base font-semibold mb-2">
+                                    {children}
+                                  </div>
+                                ),
+                                h2: ({ children }) => (
+                                  <div className="text-sm font-semibold mb-2">
+                                    {children}
+                                  </div>
+                                ),
+                                h3: ({ children }) => (
+                                  <div className="text-sm font-semibold mb-1">
+                                    {children}
+                                  </div>
+                                ),
+                                p: ({ children }) => (
+                                  <p className="mb-2 last:mb-0">{children}</p>
+                                ),
+                                ul: ({ children }) => (
+                                  <ul className="mb-2 list-disc pl-5 last:mb-0">
+                                    {children}
+                                  </ul>
+                                ),
+                                ol: ({ children }) => (
+                                  <ol className="mb-2 list-decimal pl-5 last:mb-0">
+                                    {children}
+                                  </ol>
+                                ),
+                                li: ({ children }) => (
+                                  <li className="my-0.5">{children}</li>
+                                ),
+                                strong: ({ children }) => (
+                                  <strong className="font-semibold">{children}</strong>
+                                ),
+                                em: ({ children }) => <em className="italic">{children}</em>,
+                                code: ({ children }) => (
+                                  <code className="rounded bg-black/10 px-1 py-0.5 font-mono text-[12px]">
+                                    {children}
+                                  </code>
+                                ),
+                                pre: ({ children }) => (
+                                  <pre className="mb-2 overflow-x-auto rounded-md bg-black/10 p-3 text-[12px] leading-snug">
+                                    {children}
+                                  </pre>
+                                ),
+                                a: ({ href, children }) => (
+                                  <a
+                                    href={href}
+                                    className={cn(
+                                      "underline underline-offset-2",
+                                      msg.role === "user"
+                                        ? "text-primary-foreground/90"
+                                        : "text-primary"
+                                    )}
+                                    target="_blank"
+                                    rel="noreferrer"
+                                  >
+                                    {children}
+                                  </a>
+                                ),
+                              }}
+                            >
+                              {msg.content || ""}
+                            </ReactMarkdown>
+                            {msg.isStreaming && (
+                              <span className="inline-block w-2 h-4 ml-1 bg-primary animate-pulse align-middle" />
+                            )}
+                          </div>
+
+                          {msg.metadata?.type === "task_created" && (
+                            <div className="mt-2 text-xs opacity-70 flex items-center gap-1">
+                              <span>✅</span>
+                              <span>Task added to your list</span>
+                            </div>
+                          )}
+                          {msg.metadata?.type === "timesheet_updated" && (
+                            <div className="mt-2 text-xs opacity-70 flex items-center gap-1">
+                              <span>✅</span>
+                              <span>Timesheet updated</span>
+                            </div>
+                          )}
+                          {msg.metadata?.type === "pending_action" &&
+                            msg.metadata.pendingAction && (
+                              <div className="mt-3 pt-3 border-t flex gap-2">
+                                <Button
+                                  size="sm"
+                                  onClick={async () => {
+                                    await msg.metadata!.pendingAction!.action();
+                                    // Remove pending action from message
+                                    setMessages((prev) => {
+                                      const updated = [...prev];
+                                      updated[idx] = {
+                                        ...updated[idx],
+                                        metadata: {
+                                          ...updated[idx].metadata,
+                                          type: undefined,
+                                          pendingAction: undefined,
+                                        },
+                                      };
+                                      return updated;
+                                    });
+                                  }}
+                                  className="gap-2"
+                                >
+                                  <Check className="h-3.5 w-3.5" />
+                                  Approve
+                                </Button>
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  onClick={() => {
+                                    // Remove pending action from message
+                                    setMessages((prev) => {
+                                      const updated = [...prev];
+                                      updated[idx] = {
+                                        ...updated[idx],
+                                        metadata: {
+                                          ...updated[idx].metadata,
+                                          type: undefined,
+                                          pendingAction: undefined,
+                                        },
+                                      };
+                                      return updated;
+                                    });
+                                  }}
+                                  className="gap-2"
+                                >
+                                  <X className="h-3.5 w-3.5" />
+                                  Decline
+                                </Button>
+                              </div>
+                            )}
+                        </CardContent>
+                      </Card>
+                    </div>
+                  </div>
+                ))}
+
+                {isTyping && (
+                  <div className="w-full flex justify-start">
+                    <div className="flex gap-3 w-full max-w-[680px]">
+                      <div className="p-2 rounded-full bg-primary/10 shrink-0 mt-1">
+                        <Bot className="h-4 w-4 text-primary" />
+                      </div>
+                      <Card className="bg-muted w-fit max-w-[calc(680px-3.25rem)]">
+                        <CardContent className="p-4">
+                          <div className="flex items-center gap-2">
+                            <IconSpinner className="h-4 w-4" />
+                            <span className="text-sm text-muted-foreground">
+                              AxonChat is thinking…
+                            </span>
+                          </div>
+                        </CardContent>
+                      </Card>
+                    </div>
+                  </div>
+                )}
+
+                <div ref={messagesEndRef} />
               </div>
             </div>
-            <DialogFooter>
-              <Button
-                variant="outline"
-                onClick={() => {
-                  setCustomDialogOpen(false);
-                }}
-              >
-                Cancel
-              </Button>
-              <Button
-                onClick={() => {
-                  const label = customLabel.trim();
-                  const query = customQuery.trim();
-                  if (!label || !query) return;
-                  const id = `custom-${Date.now()}`;
-                  setCustomActions((prev) => [{ id, label, query }, ...prev].slice(0, 20));
-                  setCustomLabel("");
-                  setCustomQuery("");
-                  setCustomDialogOpen(false);
-                }}
-                disabled={!customLabel.trim() || !customQuery.trim()}
-              >
-                Save
-              </Button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
+          </ScrollArea>
 
-        {/* Input */}
-        <div className="flex gap-2">
-          <Textarea
-            value={input}
-            onChange={(e) => setInput(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === "Enter" && !e.shiftKey) {
-                e.preventDefault();
-                void handleSend();
-              }
-            }}
-            placeholder="Ask me anything... (e.g., 'Create a task for reviewing the proposal', 'Show my timesheets', 'Analyze my productivity')"
-            className="min-h-[60px] resize-none"
-            disabled={isTyping}
-          />
-          <Button
-            onClick={() => void handleSend()}
-            disabled={!input.trim() || isTyping}
-            size="lg"
-            className="shrink-0"
-          >
-            {isTyping ? (
-              <IconSpinner className="h-5 w-5" />
-            ) : (
-              <Send className="h-5 w-5" />
-            )}
-          </Button>
+          {/* Prompt Bar */}
+          <div className="border-t bg-muted/20 p-3">
+            <div className="mx-auto w-full max-w-[680px]">
+              <div className="flex flex-wrap gap-2 mb-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setCustomDialogOpen(true)}
+                  className="gap-2"
+                >
+                  <Plus className="h-3.5 w-3.5" />
+                  Custom
+                </Button>
+                {allQuickActions.slice(0, 6).map((action) => (
+                  <Button
+                    key={action.id}
+                    variant="secondary"
+                    size="sm"
+                    onClick={() => void handleSend(action.query)}
+                    className="gap-2"
+                  >
+                    <action.icon className="h-3.5 w-3.5" />
+                    {action.label}
+                    {"isCustom" in action && action.isCustom ? (
+                      <button
+                        type="button"
+                        className="ml-1 opacity-70 hover:opacity-100"
+                        title="Remove custom message"
+                        onClick={(e) => {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          setCustomActions((prev) =>
+                            prev.filter((x) => x.id !== action.id)
+                          );
+                        }}
+                      >
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </button>
+                    ) : null}
+                  </Button>
+                ))}
+              </div>
+
+              <Dialog open={customDialogOpen} onOpenChange={setCustomDialogOpen}>
+                <DialogContent className="sm:max-w-lg">
+                  <DialogHeader>
+                    <DialogTitle>Add custom message</DialogTitle>
+                  </DialogHeader>
+                  <div className="space-y-3">
+                    <div className="space-y-1.5">
+                      <div className="text-sm font-medium">Button label</div>
+                      <Input
+                        value={customLabel}
+                        onChange={(e) => setCustomLabel(e.target.value)}
+                        placeholder="e.g., Weekly meetings?"
+                      />
+                    </div>
+                    <div className="space-y-1.5">
+                      <div className="text-sm font-medium">Message</div>
+                      <Textarea
+                        value={customQuery}
+                        onChange={(e) => setCustomQuery(e.target.value)}
+                        placeholder="What do you want AxonChat to send when you click it?"
+                        className="min-h-[120px]"
+                      />
+                    </div>
+                  </div>
+                  <DialogFooter>
+                    <Button variant="outline" onClick={() => setCustomDialogOpen(false)}>
+                      Cancel
+                    </Button>
+                    <Button
+                      onClick={() => {
+                        const label = customLabel.trim();
+                        const query = customQuery.trim();
+                        if (!label || !query) return;
+                        const id = `custom-${Date.now()}`;
+                        setCustomActions((prev) =>
+                          [{ id, label, query }, ...prev].slice(0, 20)
+                        );
+                        setCustomLabel("");
+                        setCustomQuery("");
+                        setCustomDialogOpen(false);
+                      }}
+                      disabled={!customLabel.trim() || !customQuery.trim()}
+                    >
+                      Save
+                    </Button>
+                  </DialogFooter>
+                </DialogContent>
+              </Dialog>
+
+              <div className="flex gap-2">
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="icon"
+                      className="h-[60px] w-[44px] shrink-0"
+                      title="Quick actions"
+                      disabled={isTyping}
+                    >
+                      <Plus className="h-4 w-4" />
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="start" className="w-64">
+                    <DropdownMenuItem
+                      onClick={() => {
+                        setCustomDialogOpen(true);
+                      }}
+                    >
+                      Add custom message…
+                    </DropdownMenuItem>
+                    <DropdownMenuSeparator />
+                    {allQuickActions.map((action) => (
+                      <DropdownMenuItem
+                        key={action.id}
+                        onClick={() => {
+                          void handleSend(action.query);
+                        }}
+                      >
+                        {action.label}
+                      </DropdownMenuItem>
+                    ))}
+                    <DropdownMenuSeparator />
+                    <DropdownMenuItem onClick={() => void handleSend("/summarize")}>
+                      /summarize
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => void handleSend("/plan")}>
+                      /plan
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => void handleSend("/retry")}>
+                      /retry
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+
+                <Textarea
+                  ref={inputRef}
+                  value={input}
+                  onChange={(e) => setInput(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" && !e.shiftKey) {
+                      e.preventDefault();
+                      void handleSend();
+                    }
+                    if (e.key === "ArrowUp" && !e.shiftKey && !e.altKey && !e.ctrlKey && !e.metaKey) {
+                      if (!input.trim()) {
+                        const lastUser = [...messages].reverse().find((m) => m.role === "user");
+                        if (lastUser?.content) {
+                          e.preventDefault();
+                          const text = String(lastUser.content);
+                          setInput(text);
+                          window.setTimeout(() => {
+                            inputRef.current?.focus();
+                            try {
+                              inputRef.current?.setSelectionRange(text.length, text.length);
+                            } catch {}
+                          }, 0);
+                        }
+                      }
+                    }
+                  }}
+                  placeholder="Ask AxonChat…"
+                  className="min-h-[60px] resize-none"
+                  disabled={isTyping}
+                />
+                <Button
+                  onClick={() => void handleSend()}
+                  disabled={!input.trim() || isTyping}
+                  size="lg"
+                  className="shrink-0"
+                >
+                  {isTyping ? (
+                    <IconSpinner className="h-5 w-5" />
+                  ) : (
+                    <Send className="h-5 w-5" />
+                  )}
+                </Button>
+              </div>
+              <div className="mt-2 text-[11px] text-muted-foreground">
+                Enter to send · Shift+Enter for a new line
+              </div>
+            </div>
+          </div>
         </div>
       </div>
     </div>

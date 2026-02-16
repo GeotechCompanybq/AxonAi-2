@@ -16,6 +16,8 @@ export type ChatInput = z.infer<typeof ChatInputSchema>;
 
 const ChatOutputSchema = z.object({
   reply: z.string(),
+  reasoningTitle: z.string().optional(),
+  reasoning: z.string().optional(),
 });
 export type ChatOutput = z.infer<typeof ChatOutputSchema>;
 
@@ -28,14 +30,29 @@ const chatPrompt = (ai as any).definePrompt({
   name: "chatPrompt",
   input: { schema: ChatInputSchema },
   output: { schema: ChatOutputSchema },
-  prompt: `You are Axon, a helpful AI for scheduling, task planning, and analytics.
-
-Conversation so far:
+  prompt: `Conversation so far:
 {{#each messages}}
 {{role}}: {{content}}
 {{/each}}
 
-Respond to the latest user message with a concise, actionable reply.
+Write the assistant reply to the latest user message. Follow any system instructions.
+
+Return STRICT JSON matching this TypeScript shape and nothing else:
+{
+  "reply": string,
+  "reasoningTitle"?: string,
+  "reasoning"?: string
+}
+
+Reasoning requirements:
+- This is a short, high-level “what I’m doing” note for the user (no hidden step-by-step).
+- Keep it brief (1 title line + 1-3 sentences).
+- Don’t include secrets, internal tool output, or chain-of-thought.
+
+Reply requirements:
+- The 'reply' field is REQUIRED and must NEVER be empty.
+- If the user’s request is unclear, ask ONE short clarifying question in 'reply'.
+- Sound human: short acknowledgment, then concise bullets when helpful.
 `,
 });
 
@@ -46,11 +63,35 @@ const chatFlow = (ai as any).defineFlow(
     outputSchema: ChatOutputSchema,
   },
   async (input: ChatInput) => {
-    const { output } = await chatPrompt(input);
+    const result: any = await chatPrompt(input);
+    const output: any =
+      result?.output ??
+      result?.text ??
+      result?.response?.text ??
+      result?.message ??
+      result;
+
     // Provider outputs can vary; normalize to { reply: string }
     if (typeof output === "string") {
       const text = output.trim();
-      if (text) return { reply: text };
+      if (text) {
+        // Sometimes models return JSON as text; try to parse { reply, reasoningTitle, reasoning }
+        try {
+          const j = JSON.parse(text);
+          if (typeof j?.reply === "string" && j.reply.trim()) {
+            return {
+              reply: j.reply.trim(),
+              reasoningTitle:
+                typeof j?.reasoningTitle === "string"
+                  ? j.reasoningTitle.trim()
+                  : undefined,
+              reasoning:
+                typeof j?.reasoning === "string" ? j.reasoning.trim() : undefined,
+            };
+          }
+        } catch {}
+        return { reply: text };
+      }
     }
 
     const obj: any = output;
@@ -61,11 +102,32 @@ const chatFlow = (ai as any).defineFlow(
       (typeof obj?.content === "string" && obj.content) ||
       "";
 
-    if (String(reply).trim()) return { reply: String(reply).trim() };
+    const reasoningTitle =
+      (typeof obj?.reasoningTitle === "string" && obj.reasoningTitle) ||
+      (typeof obj?.output?.reasoningTitle === "string" && obj.output.reasoningTitle) ||
+      "";
+    const reasoning =
+      (typeof obj?.reasoning === "string" && obj.reasoning) ||
+      (typeof obj?.output?.reasoning === "string" && obj.output.reasoning) ||
+      "";
 
+    if (String(reply).trim())
+      return {
+        reply: String(reply).trim(),
+        reasoningTitle: String(reasoningTitle || "").trim() || undefined,
+        reasoning: String(reasoning || "").trim() || undefined,
+      };
+
+    // Hard fallback: ensure we always return a usable, human reply.
+    const lastUser =
+      [...(input.messages || [])].reverse().find((m) => m.role === "user")
+        ?.content || "";
     return {
-      reply:
-        "I didn’t get a response back. Please try again (or rephrase your question).",
+      reply: lastUser.trim()
+        ? `Got it. Quick question so I do this right: what’s the outcome you want from “${lastUser.trim().slice(0, 120)}”?`
+        : "Got it. What would you like me to do next?",
+      reasoningTitle: String(reasoningTitle || "").trim() || undefined,
+      reasoning: String(reasoning || "").trim() || undefined,
     };
   }
 );

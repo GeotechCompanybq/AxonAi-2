@@ -30,6 +30,8 @@ export async function POST(req: NextRequest) {
               messages: messages.map((msg: any) => ({
                 role: msg.role,
                 content: msg.content,
+                reasoningTitle: msg.reasoningTitle || "",
+                reasoning: msg.reasoning || "",
                 timestamp: msg.timestamp ? new Date(msg.timestamp).getTime() : Date.now(),
                 metadata: msg.metadata || {},
               })),
@@ -90,6 +92,8 @@ export async function POST(req: NextRequest) {
             batch.set(msgRef, {
               role: msg.role,
               content: msg.content,
+              reasoningTitle: msg.reasoningTitle || "",
+              reasoning: msg.reasoning || "",
               timestamp: msg.timestamp ? new Date(msg.timestamp).getTime() : Date.now(),
               metadata: msg.metadata || {},
               index: i + chunkIndex,

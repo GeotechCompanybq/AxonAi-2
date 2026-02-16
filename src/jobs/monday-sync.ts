@@ -3,7 +3,7 @@ import { getDb, getCollectionNames } from "@/lib/mongo";
 import { EmailNotificationService } from "@/lib/email-notifications";
 
 async function fetchAndStoreForUser(uid: string, token: string) {
-  const mod = await import("@/app/api/monday/tasks/route");
+  const mod = await import("@/lib/monday");
   const tasks = await mod.fetchMondayTasks(token);
   const db = await getDb();
   const { userTasks, users } = getCollectionNames();

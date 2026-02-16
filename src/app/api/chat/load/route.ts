@@ -28,6 +28,8 @@ export async function GET(req: NextRequest) {
         messages = (sessionData.messages || []).map((msg: any) => ({
           role: msg.role,
           content: msg.content,
+          reasoningTitle: msg.reasoningTitle || "",
+          reasoning: msg.reasoning || "",
           timestamp: new Date(msg.timestamp || Date.now()),
           metadata: msg.metadata || {},
         }));
@@ -57,6 +59,8 @@ export async function GET(req: NextRequest) {
               return {
                 role: data.role,
                 content: data.content,
+                reasoningTitle: data.reasoningTitle || "",
+                reasoning: data.reasoning || "",
                 timestamp: new Date(data.timestamp || Date.now()),
                 metadata: data.metadata || {},
               };

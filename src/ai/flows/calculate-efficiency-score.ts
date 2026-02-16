@@ -38,7 +38,8 @@ export async function calculateEfficiencyScore(input: CalculateEfficiencyScoreIn
   return calculateEfficiencyScoreFlow(input);
 }
 
-const calculateEfficiencyScorePrompt = ai.definePrompt({
+// NOTE: Genkit typings can differ by provider; cast to any to avoid TS overload conflicts.
+const calculateEfficiencyScorePrompt = (ai as any).definePrompt({
   name: 'calculateEfficiencyScorePrompt',
   input: {schema: CalculateEfficiencyScoreInputSchema},
   output: {schema: CalculateEfficiencyScoreOutputSchema},
@@ -77,13 +78,13 @@ Return the score, message, and optional feedback/suggestions.
 `,
 });
 
-const calculateEfficiencyScoreFlow = ai.defineFlow(
+const calculateEfficiencyScoreFlow = (ai as any).defineFlow(
   {
     name: 'calculateEfficiencyScoreFlow',
     inputSchema: CalculateEfficiencyScoreInputSchema,
     outputSchema: CalculateEfficiencyScoreOutputSchema,
   },
-  async (input) => {
+  async (input: CalculateEfficiencyScoreInput) => {
     if (input.tasks.length === 0) {
       return {
         score: 0,

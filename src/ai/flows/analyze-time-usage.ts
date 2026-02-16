@@ -83,7 +83,8 @@ export async function analyzeTimeUsage(
   return analyzeTimeUsageFlow(input);
 }
 
-const analyzeTimeUsagePrompt = ai.definePrompt({
+// NOTE: Genkit typings can differ by provider; cast to any to avoid TS overload conflicts.
+const analyzeTimeUsagePrompt = (ai as any).definePrompt({
   name: "analyzeTimeUsagePrompt",
   input: { schema: AnalyzeTimeUsageInputSchema },
   output: { schema: AnalyzeTimeUsageOutputSchema },
@@ -125,18 +126,18 @@ The order of days in the 'weeklyUsage' array should be Mon, Tue, Wed, Thu, Fri, 
 `,
 });
 
-const analyzeTimeUsageFlow = ai.defineFlow(
+const analyzeTimeUsageFlow = (ai as any).defineFlow(
   {
     name: "analyzeTimeUsageFlow",
     inputSchema: AnalyzeTimeUsageInputSchema,
     outputSchema: AnalyzeTimeUsageOutputSchema,
   },
-  async (input) => {
+  async (input: AnalyzeTimeUsageInput) => {
     // Helper function to format ISO date, as Handlebars might not have it.
     // This is not directly used by Handlebars in this version but good for other contexts.
     const formattedInput = {
       ...input,
-      tasks: input.tasks.map((task) => ({
+      tasks: input.tasks.map((task: any) => ({
         ...task,
         // @ts-ignore
         formatISO: (dateString?: string) =>

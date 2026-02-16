@@ -213,19 +213,23 @@ export default function TimesheetSettingsPage() {
                   new Set(arr.map((p: any) => String(p?.name || "")))
                 ).filter(Boolean);
                 setPrimaryProjects(names);
-                const clients = Array.from(
-                  new Set(arr.map((p: any) => String(p?.client || "")).filter(Boolean))
+                const clients: string[] = Array.from(
+                  new Set(
+                    (arr
+                      .map((p: any) => String(p?.client || ""))
+                      .filter(Boolean) as string[])
+                  )
                 );
                 setClientNames((prev) =>
                   Array.from(new Set([...(prev || []), ...clients]))
                 );
                 // Auto-categorize billable projects: add their client names to billableClientNames
-                const billableClients = Array.from(
+                const billableClients: string[] = Array.from(
                   new Set(
-                    arr
+                    (arr
                       .filter((p: any) => Boolean(p?.is_billable) && p?.client)
                       .map((p: any) => String(p?.client || ""))
-                      .filter(Boolean)
+                      .filter(Boolean) as string[])
                   )
                 );
                 // Also auto-add "TruePoint Solutions" if found in projects (even if not explicitly billable)
@@ -287,23 +291,31 @@ export default function TimesheetSettingsPage() {
                 }
               }
               if (arr.length > 0) {
-                const names = Array.from(
-                  new Set(arr.map((p: any) => String(p?.name || "")))
-                ).filter(Boolean);
+                const names: string[] = Array.from(
+                  new Set<string>(
+                    arr
+                      .map((p: any) => String(p?.name || ""))
+                      .filter(Boolean) as string[]
+                  )
+                );
                 setAltProjects(names);
-                const clients = Array.from(
-                  new Set(arr.map((p: any) => String(p?.client || "")).filter(Boolean))
+                const clients: string[] = Array.from(
+                  new Set<string>(
+                    arr
+                      .map((p: any) => String(p?.client || ""))
+                      .filter(Boolean) as string[]
+                  )
                 );
                 setClientNames((prev) =>
-                  Array.from(new Set([...(prev || []), ...clients]))
+                  Array.from(new Set<string>([...prev, ...clients]))
                 );
                 // Auto-categorize billable projects: add their client names to billableClientNames
-                const billableClients = Array.from(
-                  new Set(
+                const billableClients: string[] = Array.from(
+                  new Set<string>(
                     arr
                       .filter((p: any) => Boolean(p?.is_billable) && p?.client)
                       .map((p: any) => String(p?.client || ""))
-                      .filter(Boolean)
+                      .filter(Boolean) as string[]
                   )
                 );
                 // Also auto-add "TruePoint Solutions" if found in projects (even if not explicitly billable)
@@ -320,7 +332,7 @@ export default function TimesheetSettingsPage() {
                   setSettings((s) => ({
                     ...s,
                     billableClientNames: Array.from(
-                      new Set([...s.billableClientNames, ...billableClients])
+                      new Set<string>([...s.billableClientNames, ...billableClients])
                     ),
                   }));
                 }

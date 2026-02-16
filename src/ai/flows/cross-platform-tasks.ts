@@ -221,13 +221,14 @@ export async function retrieveCrossPlatformTasks(
 }
 
 // Define the AI flow
-export const crossPlatformTaskRetrievalFlow = ai.defineFlow(
+// NOTE: Genkit typings can differ by provider; cast to any to avoid TS overload conflicts.
+export const crossPlatformTaskRetrievalFlow = (ai as any).defineFlow(
   {
     name: "crossPlatformTaskRetrieval",
     inputSchema: CrossPlatformTaskRetrievalInputSchema,
     outputSchema: CrossPlatformTaskRetrievalOutputSchema,
   },
-  async (input) => {
+  async (input: z.infer<typeof CrossPlatformTaskRetrievalInputSchema>) => {
     const { userId, platforms = ["Jira", "Monday"], filterOptions } = input;
 
     // Retrieve tokens from Firestore

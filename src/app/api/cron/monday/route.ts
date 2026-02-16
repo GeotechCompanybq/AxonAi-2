@@ -11,7 +11,7 @@ export const revalidate = 0;
 export const maxDuration = 300; // extend to 5 minutes (platform max)
 
 async function fetchAndStoreForUser(uid: string, token: string) {
-  const mod = await import("@/app/api/monday/tasks/route");
+  const mod = await import("@/lib/monday");
   const tasks = await mod.fetchMondayTasks(token);
   const db = await getDb();
   const { userTasks, users } = getCollectionNames();

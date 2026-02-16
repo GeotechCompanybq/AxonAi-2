@@ -3,9 +3,7 @@ import { getDb, getCollectionNames } from "@/lib/mongo";
 
 export const runtime = "nodejs";
 
-// Reuse Monday tasks fetcher by importing from the route file
-// We exported fetchMondayTasks there.
-import { fetchMondayTasks } from "@/app/api/monday/tasks/route";
+import { fetchMondayTasks } from "@/lib/monday";
 
 type DraftTimesheet = {
   id: string;

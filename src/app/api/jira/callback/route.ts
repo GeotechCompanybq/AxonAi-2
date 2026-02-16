@@ -1,5 +1,4 @@
 import { NextRequest, NextResponse } from "next/server";
-import { cookies } from "next/headers";
 import { getDb, getCollectionNames } from "@/lib/mongo";
 
 export async function GET(req: NextRequest) {
@@ -41,16 +40,6 @@ export async function GET(req: NextRequest) {
       );
     }
 
-    // Store access token in an httpOnly cookie
-    const cookieStore = cookies();
-    cookieStore.set("jira_token", tokenJson.access_token, {
-      httpOnly: true,
-      sameSite: "lax",
-      secure: true,
-      path: "/",
-      maxAge: tokenJson.expires_in || 60 * 60 * 24 * 30, // default 30 days
-    });
-
     // If user ID is provided, store token in Mongo
     if (uid) {
       try {
@@ -75,7 +64,17 @@ export async function GET(req: NextRequest) {
 
     // Redirect to settings page
     const settingsPage = new URL("/settings", req.nextUrl.origin);
-    return NextResponse.redirect(settingsPage);
+    const res = NextResponse.redirect(settingsPage);
+    const secureCookie =
+      req.nextUrl.protocol === "https:" || process.env.NODE_ENV === "production";
+    res.cookies.set("jira_token", tokenJson.access_token, {
+      httpOnly: true,
+      sameSite: "lax",
+      secure: secureCookie,
+      path: "/",
+      maxAge: Number(tokenJson.expires_in || 60 * 60 * 24 * 30), // default 30 days
+    });
+    return res;
   } catch (e) {
     console.error("Jira callback error", e);
     return NextResponse.json(

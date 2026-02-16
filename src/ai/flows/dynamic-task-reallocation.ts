@@ -36,7 +36,8 @@ export async function dynamicTaskReallocation(input: DynamicTaskReallocationInpu
   return dynamicTaskReallocationFlow(input);
 }
 
-const prompt = ai.definePrompt({
+// NOTE: Genkit typings can differ by provider; cast to any to avoid TS overload conflicts.
+const prompt = (ai as any).definePrompt({
   name: 'dynamicTaskReallocationPrompt',
   input: {schema: DynamicTaskReallocationInputSchema},
   output: {schema: DynamicTaskReallocationOutputSchema},
@@ -57,13 +58,13 @@ const prompt = ai.definePrompt({
   Be as concise as possible in the summary.`,
 });
 
-const dynamicTaskReallocationFlow = ai.defineFlow(
+const dynamicTaskReallocationFlow = (ai as any).defineFlow(
   {
     name: 'dynamicTaskReallocationFlow',
     inputSchema: DynamicTaskReallocationInputSchema,
     outputSchema: DynamicTaskReallocationOutputSchema,
   },
-  async input => {
+  async (input: DynamicTaskReallocationInput) => {
     const {output} = await prompt(input);
     return output!;
   }

@@ -40,7 +40,8 @@ export async function intelligentTaskBreakdown(
   return intelligentTaskBreakdownFlow(input);
 }
 
-const prompt = ai.definePrompt({
+// NOTE: Genkit typings can differ by provider; cast to any to avoid TS overload conflicts.
+const prompt = (ai as any).definePrompt({
   name: 'intelligentTaskBreakdownPrompt',
   input: {schema: IntelligentTaskBreakdownInputSchema},
   output: {schema: IntelligentTaskBreakdownOutputSchema},
@@ -54,13 +55,13 @@ const prompt = ai.definePrompt({
   `,
 });
 
-const intelligentTaskBreakdownFlow = ai.defineFlow(
+const intelligentTaskBreakdownFlow = (ai as any).defineFlow(
   {
     name: 'intelligentTaskBreakdownFlow',
     inputSchema: IntelligentTaskBreakdownInputSchema,
     outputSchema: IntelligentTaskBreakdownOutputSchema,
   },
-  async input => {
+  async (input: IntelligentTaskBreakdownInput) => {
     const {output} = await prompt(input);
     return output!;
   }

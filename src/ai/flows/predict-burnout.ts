@@ -38,7 +38,8 @@ export async function predictBurnout(input: PredictBurnoutInput): Promise<Predic
   return predictBurnoutFlow(input);
 }
 
-const predictBurnoutPrompt = ai.definePrompt({
+// NOTE: Genkit typings can differ by provider; cast to any to avoid TS overload conflicts.
+const predictBurnoutPrompt = (ai as any).definePrompt({
   name: 'predictBurnoutPrompt',
   input: {schema: PredictBurnoutInputSchema},
   output: {schema: PredictBurnoutOutputSchema},
@@ -80,13 +81,13 @@ Return the riskLevel, progressValue, and message.
 `,
 });
 
-const predictBurnoutFlow = ai.defineFlow(
+const predictBurnoutFlow = (ai as any).defineFlow(
   {
     name: 'predictBurnoutFlow',
     inputSchema: PredictBurnoutInputSchema,
     outputSchema: PredictBurnoutOutputSchema,
   },
-  async (input) => {
+  async (input: PredictBurnoutInput) => {
     if (input.tasks.length === 0) {
       return {
         riskLevel: 'low',

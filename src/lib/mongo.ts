@@ -61,5 +61,6 @@ export function getCollectionNames() {
     weeklySummaries: "weekly_summaries", // documents: { uid, from, to, summary, hoursTotal, entriesCount, createdAt }
     timesheetSettings: "timesheet_settings", // documents: { uid, ...settings }
     timesheetMismatches: "timesheet_mismatches", // documents: { uid, from, to, status, mismatches[], createdAt, updatedAt }
+    axonchatSettings: "axonchat_settings", // documents: { uid, tone, updatedAt }
   } as const;
 }
