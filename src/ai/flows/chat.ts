@@ -23,7 +23,8 @@ export async function chat(input: ChatInput): Promise<ChatOutput> {
   return chatFlow(input);
 }
 
-const chatPrompt = ai.definePrompt({
+// NOTE: Genkit typings can differ by provider; cast to any to avoid TS overload conflicts.
+const chatPrompt = (ai as any).definePrompt({
   name: "chatPrompt",
   input: { schema: ChatInputSchema },
   output: { schema: ChatOutputSchema },
@@ -38,15 +39,34 @@ Respond to the latest user message with a concise, actionable reply.
 `,
 });
 
-const chatFlow = ai.defineFlow(
+const chatFlow = (ai as any).defineFlow(
   {
     name: "chatFlow",
     inputSchema: ChatInputSchema,
     outputSchema: ChatOutputSchema,
   },
-  async (input) => {
+  async (input: ChatInput) => {
     const { output } = await chatPrompt(input);
-    return output!;
+    // Provider outputs can vary; normalize to { reply: string }
+    if (typeof output === "string") {
+      const text = output.trim();
+      if (text) return { reply: text };
+    }
+
+    const obj: any = output;
+    const reply =
+      (typeof obj?.reply === "string" && obj.reply) ||
+      (typeof obj?.output?.reply === "string" && obj.output.reply) ||
+      (typeof obj?.message === "string" && obj.message) ||
+      (typeof obj?.content === "string" && obj.content) ||
+      "";
+
+    if (String(reply).trim()) return { reply: String(reply).trim() };
+
+    return {
+      reply:
+        "I didn’t get a response back. Please try again (or rephrase your question).",
+    };
   }
 );
 
@@ -96,11 +116,11 @@ const TaskQueryOutputSchema = z.object({
 });
 
 // AI flow for task-related queries
-export const taskQueryFlow = ai.defineFlow({
+export const taskQueryFlow = (ai as any).defineFlow({
   name: "taskQuery",
   inputSchema: TaskQueryInputSchema,
   outputSchema: TaskQueryOutputSchema,
-  handler: async (input) => {
+  handler: async (input: z.infer<typeof TaskQueryInputSchema>) => {
     // Retrieve tasks across platforms
     const taskResult = await crossPlatformTaskRetrievalFlow({
       userId: input.userId,
@@ -152,7 +172,7 @@ export const taskQueryFlow = ai.defineFlow({
 
     return {
       response,
-      tasks: tasks.map((task) => ({
+      tasks: tasks.map((task: any) => ({
         name: task.name,
         platform: task.platform,
         status: task.status,

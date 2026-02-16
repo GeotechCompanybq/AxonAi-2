@@ -41,7 +41,7 @@ const navCore: NavItem[] = [
 ];
 
 const navPlanning: NavItem[] = [
-  { href: "/schedule/create", label: "Create Schedule", icon: CalendarPlus },
+  { href: "/schedule/create", label: "Axon Chat", icon: CalendarPlus },
   { href: "/tasks", label: "My Tasks", icon: ListChecks },
   { href: "/calendar", label: "Calendar", icon: CalendarDays },
 ];
@@ -165,7 +165,8 @@ export function SidebarNav() {
     const isRecent = mostRecent === item.href;
     const isExpanded = expandedMenus.has(item.href);
     const isPinned = pinnedItems.has(item.href);
-    const hasSubmenu = item.submenu && item.submenu.length > 0;
+    const submenuItems = item.submenu ?? [];
+    const hasSubmenu = submenuItems.length > 0;
 
     return (
       <div 
@@ -276,7 +277,7 @@ export function SidebarNav() {
         {/* Submenu */}
         {hasSubmenu && isExpanded && (
           <div className="ml-8 mt-1 space-y-1 border-l border-white/10 pl-3">
-            {item.submenu.map((subItem) => {
+            {submenuItems.map((subItem) => {
               const isSubActive = pathname === subItem.href;
               const isSubRecent = mostRecent === subItem.href;
               return (

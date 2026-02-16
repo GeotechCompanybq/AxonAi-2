@@ -1,13 +1,34 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
-import { Bot, Send, Sparkles, Calendar, Clock, ListChecks, BarChart3, Zap, Check, X } from "lucide-react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import {
+  Bot,
+  Send,
+  Sparkles,
+  Calendar,
+  Clock,
+  ListChecks,
+  BarChart3,
+  Zap,
+  Check,
+  X,
+  Plus,
+  Trash2,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Badge } from "@/components/ui/badge";
+import { Input } from "@/components/ui/input";
+import {
+  Dialog,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { useAuth } from "@/hooks/use-auth";
 import { IconSpinner } from "@/components/icons";
 import {
@@ -39,11 +60,21 @@ type ConnectionStatus = {
   monday: boolean;
 };
 
+type CustomQuickAction = {
+  id: string;
+  label: string;
+  query: string;
+};
+
 export function AxonChatInterface() {
   const { user } = useAuth();
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState("");
   const [isTyping, setIsTyping] = useState(false);
+  const [customActions, setCustomActions] = useState<CustomQuickAction[]>([]);
+  const [customDialogOpen, setCustomDialogOpen] = useState(false);
+  const [customLabel, setCustomLabel] = useState("");
+  const [customQuery, setCustomQuery] = useState("");
   const [sessionId, setSessionId] = useState<string>("default");
   const [isLoadingHistory, setIsLoadingHistory] = useState(true);
   const [connections, setConnections] = useState<ConnectionStatus>({
@@ -54,12 +85,48 @@ export function AxonChatInterface() {
   });
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const saveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const sendInFlightRef = useRef(false);
+
+  const CUSTOM_ACTIONS_KEY = "axonchat_custom_actions_v1";
+
+  const quickActions = [
+    { label: "View Tasks", icon: ListChecks, query: "Show my tasks" },
+    { label: "View Timesheets", icon: Clock, query: "Show my timesheets" },
+    { label: "View Calendar", icon: Calendar, query: "Show my calendar" },
+    { label: "Analyze", icon: BarChart3, query: "Analyze my productivity" },
+  ];
 
   // Load chat history on mount
   useEffect(() => {
     loadChatHistory();
     checkConnections();
   }, []);
+
+  // Load custom quick actions
+  useEffect(() => {
+    try {
+      const raw = window.localStorage.getItem(CUSTOM_ACTIONS_KEY);
+      if (!raw) return;
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed)) {
+        const cleaned = parsed
+          .filter((x) => x && typeof x.label === "string" && typeof x.query === "string")
+          .map((x) => ({
+            id: String(x.id || `${x.label}-${x.query}`),
+            label: String(x.label).slice(0, 40),
+            query: String(x.query).slice(0, 4000),
+          }));
+        setCustomActions(cleaned);
+      }
+    } catch {}
+  }, []);
+
+  // Persist custom quick actions
+  useEffect(() => {
+    try {
+      window.localStorage.setItem(CUSTOM_ACTIONS_KEY, JSON.stringify(customActions));
+    } catch {}
+  }, [customActions]);
 
   async function loadChatHistory() {
     const uid = (window as any).__AXON_UID__ || user?.uid;
@@ -239,9 +306,10 @@ What would you like to do?`,
     }
   }
 
-  async function handleSend() {
-    const trimmed = input.trim();
-    if (!trimmed || isTyping) return;
+  async function handleSend(explicitText?: string) {
+    const trimmed = (explicitText ?? input).trim();
+    if (!trimmed || isTyping || sendInFlightRef.current) return;
+    sendInFlightRef.current = true;
 
     // Add user message
     const userMessage: ChatMessage = {
@@ -278,8 +346,22 @@ What would you like to do?`,
       setMessages((prev) => [...prev, errorMessage]);
     } finally {
       setIsTyping(false);
+      sendInFlightRef.current = false;
     }
   }
+
+  const allQuickActions = useMemo(() => {
+    return [
+      ...customActions.map((a) => ({
+        label: a.label,
+        icon: Zap,
+        query: a.query,
+        id: a.id,
+        isCustom: true as const,
+      })),
+      ...quickActions.map((a) => ({ ...a, id: a.label, isCustom: false as const })),
+    ];
+  }, [customActions]);
 
   async function handleUserQuery(query: string): Promise<{ content: string; metadata?: any; isStreaming?: boolean }> {
     const lowerQuery = query.toLowerCase();
@@ -811,9 +893,13 @@ What would you like to do?`,
     setMessages((prev) => [...prev, streamingMessage]);
 
     try {
+      const controller = new AbortController();
+      const timeoutId = window.setTimeout(() => controller.abort(), 45_000);
+
       const res = await fetch("/api/chat/stream", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
+        signal: controller.signal,
         body: JSON.stringify({
           messages: messages
             .filter((m) => m.role !== "system" && !m.isStreaming)
@@ -822,13 +908,30 @@ What would you like to do?`,
         }),
       });
 
+      // If this isn't an SSE response, parse error payload and surface it
+      const contentType = res.headers.get("content-type") || "";
       if (!res.ok) {
-        throw new Error("Chat request failed");
+        const raw = await res.text().catch(() => "");
+        let msg = "Chat request failed";
+        try {
+          const j = raw ? JSON.parse(raw) : null;
+          msg =
+            (j && (j.error || j.message || j.detail)) ||
+            (raw ? raw.slice(0, 200) : msg);
+        } catch {
+          if (raw) msg = raw.slice(0, 200);
+        }
+        throw new Error(msg);
+      }
+      if (!contentType.includes("text/event-stream")) {
+        const raw = await res.text().catch(() => "");
+        throw new Error(raw ? `Unexpected response: ${raw.slice(0, 200)}` : "Unexpected response");
       }
 
       const reader = res.body?.getReader();
       const decoder = new TextDecoder();
       let fullContent = "";
+      let buffer = "";
 
       if (!reader) {
         throw new Error("No response body");
@@ -838,51 +941,60 @@ What would you like to do?`,
         const { done, value } = await reader.read();
         if (done) break;
 
-        const chunk = decoder.decode(value);
-        const lines = chunk.split("\n");
+        buffer += decoder.decode(value, { stream: true });
 
-        for (const line of lines) {
-          if (line.startsWith("data: ")) {
-            try {
-              const data = JSON.parse(line.slice(6));
-              if (data.error) {
-                throw new Error(data.error);
+        // SSE events are separated by a blank line
+        const parts = buffer.split("\n\n");
+        buffer = parts.pop() || "";
+
+        for (const part of parts) {
+          const dataLine = part
+            .split("\n")
+            .find((l) => l.startsWith("data:"));
+          if (!dataLine) continue;
+
+          const raw = dataLine.replace(/^data:\s?/, "").trim();
+          if (!raw) continue;
+
+          const data = JSON.parse(raw) as any;
+
+          if (data?.error) {
+            throw new Error(String(data.error));
+          }
+
+          if (typeof data?.content === "string" && data.content.length > 0) {
+            fullContent += data.content;
+            setMessages((prev) => {
+              const updated = [...prev];
+              const lastIndex = updated.length - 1;
+              if (lastIndex >= 0 && updated[lastIndex].isStreaming) {
+                updated[lastIndex] = {
+                  ...updated[lastIndex],
+                  content: fullContent,
+                };
               }
-              if (data.content) {
-                fullContent += data.content;
-                // Update streaming message in real-time
-                setMessages((prev) => {
-                  const updated = [...prev];
-                  const lastIndex = updated.length - 1;
-                  if (lastIndex >= 0 && updated[lastIndex].isStreaming) {
-                    updated[lastIndex] = {
-                      ...updated[lastIndex],
-                      content: fullContent,
-                    };
-                  }
-                  return updated;
-                });
+              return updated;
+            });
+          }
+
+          if (data?.done) {
+            setMessages((prev) => {
+              const updated = [...prev];
+              const lastIndex = updated.length - 1;
+              if (lastIndex >= 0 && updated[lastIndex].isStreaming) {
+                updated[lastIndex] = {
+                  ...updated[lastIndex],
+                  content: fullContent || "…",
+                  isStreaming: false,
+                };
               }
-              if (data.done) {
-                // Mark as complete
-                setMessages((prev) => {
-                  const updated = [...prev];
-                  const lastIndex = updated.length - 1;
-                  if (lastIndex >= 0 && updated[lastIndex].isStreaming) {
-                    updated[lastIndex] = {
-                      ...updated[lastIndex],
-                      isStreaming: false,
-                    };
-                  }
-                  return updated;
-                });
-              }
-            } catch (e) {
-              // Ignore JSON parse errors for incomplete chunks
-            }
+              return updated;
+            });
           }
         }
       }
+
+      window.clearTimeout(timeoutId);
 
       // Return with isStreaming flag to prevent duplicate addition
       return {
@@ -893,7 +1005,13 @@ What would you like to do?`,
       // Remove streaming message on error
       setMessages((prev) => prev.filter((m) => !m.isStreaming));
       return {
-        content: `❌ Failed to process request: ${error instanceof Error ? error.message : "Unknown error"}`,
+        content: `❌ Failed to process request: ${
+          (error as any)?.name === "AbortError"
+            ? "Timed out waiting for a response"
+            : error instanceof Error
+              ? error.message
+              : "Unknown error"
+        }`,
         metadata: { type: "error" },
       };
     }
@@ -1082,13 +1200,6 @@ What would you like to do?`,
   function getToday(): string {
     return new Date().toISOString().slice(0, 10);
   }
-
-  const quickActions = [
-    { label: "View Tasks", icon: ListChecks, query: "Show my tasks" },
-    { label: "View Timesheets", icon: Clock, query: "Show my timesheets" },
-    { label: "View Calendar", icon: Calendar, query: "Show my calendar" },
-    { label: "Analyze", icon: BarChart3, query: "Analyze my productivity" },
-  ];
 
   return (
     <div className="flex flex-col h-[calc(100vh-8rem)] max-h-[800px]">
@@ -1279,22 +1390,99 @@ What would you like to do?`,
       {/* Quick Actions */}
       <div className="p-4 border-t bg-muted/30">
         <div className="flex flex-wrap gap-2 mb-3">
-          {quickActions.map((action, idx) => (
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => {
+              setCustomDialogOpen(true);
+            }}
+            className="gap-2"
+          >
+            <Plus className="h-3.5 w-3.5" />
+            Custom
+          </Button>
+          {allQuickActions.map((action) => (
             <Button
-              key={idx}
+              key={action.id}
               variant="outline"
               size="sm"
               onClick={() => {
-                setInput(action.query);
-                setTimeout(() => handleSend(), 100);
+                // send immediately without relying on input state update timing
+                void handleSend(action.query);
               }}
               className="gap-2"
             >
               <action.icon className="h-3.5 w-3.5" />
               {action.label}
+              {"isCustom" in action && action.isCustom ? (
+                <button
+                  type="button"
+                  className="ml-1 opacity-70 hover:opacity-100"
+                  title="Remove custom message"
+                  onClick={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    setCustomActions((prev) => prev.filter((x) => x.id !== action.id));
+                  }}
+                >
+                  <Trash2 className="h-3.5 w-3.5" />
+                </button>
+              ) : null}
             </Button>
           ))}
         </div>
+
+        <Dialog open={customDialogOpen} onOpenChange={setCustomDialogOpen}>
+          <DialogContent className="sm:max-w-lg">
+            <DialogHeader>
+              <DialogTitle>Add custom message</DialogTitle>
+            </DialogHeader>
+            <div className="space-y-3">
+              <div className="space-y-1.5">
+                <div className="text-sm font-medium">Button label</div>
+                <Input
+                  value={customLabel}
+                  onChange={(e) => setCustomLabel(e.target.value)}
+                  placeholder="e.g., Weekly meetings?"
+                />
+              </div>
+              <div className="space-y-1.5">
+                <div className="text-sm font-medium">Message</div>
+                <Textarea
+                  value={customQuery}
+                  onChange={(e) => setCustomQuery(e.target.value)}
+                  placeholder="What do you want AxonChat to send when you click it?"
+                  className="min-h-[120px]"
+                />
+              </div>
+            </div>
+            <DialogFooter>
+              <Button
+                variant="outline"
+                onClick={() => {
+                  setCustomDialogOpen(false);
+                }}
+              >
+                Cancel
+              </Button>
+              <Button
+                onClick={() => {
+                  const label = customLabel.trim();
+                  const query = customQuery.trim();
+                  if (!label || !query) return;
+                  const id = `custom-${Date.now()}`;
+                  setCustomActions((prev) => [{ id, label, query }, ...prev].slice(0, 20));
+                  setCustomLabel("");
+                  setCustomQuery("");
+                  setCustomDialogOpen(false);
+                }}
+                disabled={!customLabel.trim() || !customQuery.trim()}
+              >
+                Save
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
 
         {/* Input */}
         <div className="flex gap-2">
@@ -1304,7 +1492,7 @@ What would you like to do?`,
             onKeyDown={(e) => {
               if (e.key === "Enter" && !e.shiftKey) {
                 e.preventDefault();
-                handleSend();
+                void handleSend();
               }
             }}
             placeholder="Ask me anything... (e.g., 'Create a task for reviewing the proposal', 'Show my timesheets', 'Analyze my productivity')"
@@ -1312,7 +1500,7 @@ What would you like to do?`,
             disabled={isTyping}
           />
           <Button
-            onClick={handleSend}
+            onClick={() => void handleSend()}
             disabled={!input.trim() || isTyping}
             size="lg"
             className="shrink-0"

@@ -15,7 +15,7 @@ export function AppSidebar() {
     (user?.displayName?.trim()?.[0] || user?.email?.trim()?.[0] || "A").toUpperCase();
 
   return (
-    <div className="flex flex-col h-screen w-full border-r border-sidebar-border/40 bg-[linear-gradient(180deg,rgba(255,255,255,0.06),rgba(255,255,255,0.02))] shadow-[0_20px_80px_rgba(0,0,0,0.4)]">
+    <div className="flex flex-col h-full w-full border-r border-sidebar-border/40 bg-[linear-gradient(180deg,rgba(255,255,255,0.06),rgba(255,255,255,0.02))] shadow-[0_20px_80px_rgba(0,0,0,0.4)]">
       {/* Header with Logo */}
       <div className="p-4 border-b border-white/5">
         <Link href="/dashboard" className="flex items-center">

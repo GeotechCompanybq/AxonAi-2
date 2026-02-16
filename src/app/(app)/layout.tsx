@@ -31,14 +31,14 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   }
 
   return (
-    <div className="flex min-h-screen ai-grid-bg">
+    <div className="flex h-screen overflow-hidden ai-grid-bg">
       {/* Always visible sidebar on desktop */}
-      <aside className="hidden md:flex w-72 flex-shrink-0">
+      <aside className="hidden md:flex w-72 flex-shrink-0 sticky top-0 h-screen">
         <AppSidebar />
       </aside>
       
       {/* Main content area */}
-      <div className="flex flex-col flex-1 min-w-0">
+      <div className="flex flex-col flex-1 min-w-0 overflow-hidden">
         <AppHeader />
         {/* Expose uid globally for API routes that need uid query param */}
         <script
@@ -46,7 +46,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
             __html: `window.__AXON_UID__ = ${JSON.stringify(user.uid)};`,
           }}
         />
-        <main className="flex-1 p-4 md:p-8 overflow-auto pb-28 md:pb-8">
+        <main className="flex-1 p-4 md:p-8 overflow-y-auto pb-28 md:pb-8">
           {children}
         </main>
       </div>
