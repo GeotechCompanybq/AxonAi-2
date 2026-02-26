@@ -23,6 +23,7 @@ import { BurnoutPredictor } from "@/components/analytics/burnout-predictor";
 import { NeededHours } from "@/components/analytics/needed-hours";
 import { ProgressPieChart } from "@/components/analytics/progress-chart";
 import { TimeUsageChart } from "@/components/analytics/time-usage-chart";
+import { IntegrationSummary } from "@/components/overview/integration-summary";
 
 export function OverviewPage() {
   const [range, setRange] = React.useState<DateRange | undefined>({
@@ -102,8 +103,9 @@ export function OverviewPage() {
           <Separator className="my-6 bg-border/60" />
         </div>
 
-        {/* KPI strip */}
-        <div className="px-5 md:px-8">
+        {/* Integrations + KPI strip */}
+        <div className="px-5 md:px-8 space-y-4">
+          <IntegrationSummary mode="personal" />
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
             {kpiState.status === "ready" ? (
               <>

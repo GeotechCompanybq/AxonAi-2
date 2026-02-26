@@ -15,6 +15,7 @@ import {
   BarChart3,
   CalendarDays,
 } from "lucide-react";
+import { IntegrationSummary } from "@/components/overview/integration-summary";
 
 export default async function OrgDashboardPage() {
   const features = [
@@ -66,6 +67,9 @@ export default async function OrgDashboardPage() {
           </p>
         </CardContent>
       </Card>
+
+      {/* @ts-expect-error IntegrationSummary is a client component */}
+      <IntegrationSummary mode="org" />
 
       <div className="grid gap-6 md:grid-cols-2">
         {features.map((feature) => (

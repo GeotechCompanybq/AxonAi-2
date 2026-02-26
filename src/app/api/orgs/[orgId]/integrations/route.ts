@@ -9,7 +9,13 @@ export async function GET(
   try {
     const snap = await adminDb.collection("orgs").doc(orgId).get();
     const data = snap.data() || {};
-    return NextResponse.json({ integrations: data.integrations || {} });
+    return NextResponse.json({
+      integrations: data.integrations || {},
+      org: {
+        id: orgId,
+        name: data.name || null,
+      },
+    });
   } catch (e) {
     const message =
       e instanceof Error ? e.message : "Failed to load integrations";

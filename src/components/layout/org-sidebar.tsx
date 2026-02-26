@@ -8,24 +8,27 @@ import {
   SidebarContent,
   SidebarFooter,
   SidebarRail,
-  useSidebar,
 } from "@/components/ui/sidebar";
 import { Button } from "@/components/ui/button";
-import { LogoImg } from "@/components/icons";
+import { LogoImg, IconSpinner } from "@/components/icons";
 import Image from "next/image";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { ChevronLeft, ChevronRight, LogOut } from "lucide-react";
+import { LogOut } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
 import { OrgSidebarNav } from "./org-sidebar-nav";
 import { useCurrentOrgId } from "@/hooks/use-current-org-id";
 import { cn } from "@/lib/utils";
+import { useCallback, useEffect, useState } from "react";
 
 export function OrgSidebar() {
   const { user, logout } = useAuth();
-  const { state, toggleSidebar } = useSidebar();
-  const { orgId } = useCurrentOrgId();
+  const { orgId, setOrgId } = useCurrentOrgId();
   const pathname = usePathname();
   const router = useRouter();
+
+  const [orgName, setOrgName] = useState<string | null>(null);
+  const [orgLoading, setOrgLoading] = useState(false);
+  const [orgError, setOrgError] = useState<string | null>(null);
 
   const initials =
     (user?.displayName?.trim()?.[0] || user?.email?.trim()?.[0] || "A").toUpperCase();
@@ -44,6 +47,68 @@ export function OrgSidebar() {
   };
 
   const isOrgWorkspace = pathname?.startsWith("/org");
+
+  useEffect(() => {
+    if (!orgId) {
+      setOrgName(null);
+      return;
+    }
+    let ignore = false;
+    setOrgLoading(true);
+    setOrgError(null);
+    (async () => {
+      try {
+        const res = await fetch(`/api/orgs/${encodeURIComponent(orgId)}/integrations`, {
+          cache: "no-store",
+        });
+        const json = await res.json();
+        if (!res.ok) {
+          throw new Error(json.error || "Failed to load organisation");
+        }
+        if (!ignore) {
+          setOrgName(json.org?.name || "Untitled organisation");
+        }
+      } catch (e: any) {
+        if (!ignore) {
+          setOrgError(e?.message || "Failed to load organisation");
+        }
+      } finally {
+        if (!ignore) {
+          setOrgLoading(false);
+        }
+      }
+    })();
+    return () => {
+      ignore = true;
+    };
+  }, [orgId]);
+
+  const handleCreateOrg = useCallback(async () => {
+    if (!user?.uid) return;
+    const name = window.prompt("Organisation name");
+    if (!name) return;
+    try {
+      setOrgLoading(true);
+      setOrgError(null);
+      const res = await fetch("/api/orgs/create", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ orgName: name.trim(), ownerUid: user.uid }),
+      });
+      const json = await res.json();
+      if (!res.ok) {
+        throw new Error(json.error || "Failed to create organisation");
+      }
+      const newOrgId = String(json.orgId);
+      setOrgId(newOrgId);
+      setOrgName(name.trim());
+      router.push(`/org/dashboard?orgId=${encodeURIComponent(newOrgId)}`);
+    } catch (e: any) {
+      setOrgError(e?.message || "Failed to create organisation");
+    } finally {
+      setOrgLoading(false);
+    }
+  }, [router, setOrgId, user?.uid]);
 
   return (
     <Sidebar
@@ -75,51 +140,69 @@ export function OrgSidebar() {
               className="rounded-lg"
             />
           </Link>
-
-          {/* Compact mode toggle (desktop) */}
-          <Button
-            type="button"
-            size="icon"
-            variant="ghost"
-            onClick={toggleSidebar}
-            className="hidden md:inline-flex rounded-xl border border-white/10 bg-white/5 hover:bg-white/10 hover:shadow-[0_0_0_1px_hsl(var(--ring)/0.25),0_0_24px_hsl(var(--ring)/0.18)]"
-            aria-label={state === "collapsed" ? "Expand sidebar" : "Collapse sidebar"}
-            title={state === "collapsed" ? "Expand" : "Collapse"}
-          >
-            {state === "collapsed" ? (
-              <ChevronRight className="h-4 w-4" />
-            ) : (
-              <ChevronLeft className="h-4 w-4" />
-            )}
-          </Button>
         </div>
 
-        <div className="mt-4 flex items-center justify-center group-data-[collapsible=icon]:hidden">
-          <div className="inline-flex items-center rounded-2xl bg-white/5 p-1 text-xs shadow-[0_10px_30px_rgba(0,0,0,0.25)]">
-            <button
-              type="button"
-              onClick={goPersonalWorkspace}
-              className={cn(
-                "px-3 py-1.5 rounded-xl transition text-xs",
-                !isOrgWorkspace
-                  ? "bg-primary text-primary-foreground shadow-[0_0_20px_rgba(56,189,248,0.6)]"
-                  : "text-muted-foreground hover:text-foreground"
-              )}
-            >
-              Personal
-            </button>
-            <button
-              type="button"
-              onClick={goOrgWorkspace}
-              className={cn(
-                "px-3 py-1.5 rounded-xl transition text-xs",
-                isOrgWorkspace
-                  ? "bg-slate-900/80 text-slate-50 shadow-[0_0_20px_rgba(15,23,42,0.8)]"
-                  : "text-muted-foreground hover:text-foreground"
-              )}
-            >
-              Organization
-            </button>
+        <div className="mt-4 flex flex-col gap-3 group-data-[collapsible=icon]:hidden">
+          <div className="px-1">
+            <div className="text-[11px] uppercase tracking-wide text-muted-foreground/80">
+              Current organisation
+            </div>
+            <div className="mt-1 flex items-center justify-between gap-2">
+              <div className="min-w-0">
+                <div className="truncate text-sm font-medium">
+                  {orgId ? orgName || "Loading…" : "No organisation selected"}
+                </div>
+                {orgError && (
+                  <div className="mt-0.5 text-[11px] text-red-500 truncate">
+                    {orgError}
+                  </div>
+                )}
+                {orgLoading && !orgError && (
+                  <div className="mt-0.5 flex items-center gap-1 text-[11px] text-muted-foreground">
+                    <IconSpinner className="h-3 w-3" />
+                    Loading…
+                  </div>
+                )}
+              </div>
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                onClick={handleCreateOrg}
+                className="h-7 rounded-xl px-2 text-[11px]"
+              >
+                New
+              </Button>
+            </div>
+          </div>
+
+          <div className="flex items-center justify-center">
+            <div className="inline-flex items-center rounded-2xl bg-white/5 p-1 text-xs shadow-[0_10px_30px_rgba(0,0,0,0.25)]">
+              <button
+                type="button"
+                onClick={goPersonalWorkspace}
+                className={cn(
+                  "px-3 py-1.5 rounded-xl transition text-xs",
+                  !isOrgWorkspace
+                    ? "bg-primary text-primary-foreground shadow-[0_0_20px_rgba(56,189,248,0.6)]"
+                    : "text-muted-foreground hover:text-foreground"
+                )}
+              >
+                Personal
+              </button>
+              <button
+                type="button"
+                onClick={goOrgWorkspace}
+                className={cn(
+                  "px-3 py-1.5 rounded-xl transition text-xs",
+                  isOrgWorkspace
+                    ? "bg-slate-900/80 text-slate-50 shadow-[0_0_20px_rgba(15,23,42,0.8)]"
+                    : "text-muted-foreground hover:text-foreground"
+                )}
+              >
+                Organization
+              </button>
+            </div>
           </div>
         </div>
       </SidebarHeader>
@@ -164,3 +247,4 @@ export function OrgSidebar() {
     </Sidebar>
   );
 }
+
