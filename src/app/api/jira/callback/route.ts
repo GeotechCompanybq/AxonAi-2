@@ -6,6 +6,9 @@ export async function GET(req: NextRequest) {
     const { searchParams } = new URL(req.url);
     const code = searchParams.get("code");
     const state = searchParams.get("state") || undefined;
+    const redirectUri =
+      process.env.JIRA_REDIRECT_URI ||
+      new URL("/api/jira/callback", req.nextUrl.origin).toString();
 
     // Extract user ID from state if provided
     const uid = state?.startsWith("uid:") ? state.slice(4) : undefined;
@@ -26,7 +29,7 @@ export async function GET(req: NextRequest) {
         client_id: process.env.JIRA_CLIENT_ID,
         client_secret: process.env.JIRA_CLIENT_SECRET,
         code,
-        redirect_uri: process.env.JIRA_REDIRECT_URI,
+        redirect_uri: redirectUri,
       }),
     });
 

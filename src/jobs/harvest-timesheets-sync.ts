@@ -149,12 +149,34 @@ async function syncForUserConn({
   return entries.length;
 }
 
+async function isOrgWideHarvestSyncEnabled(): Promise<boolean> {
+  try {
+    const snap = await adminDb
+      .collection("orgs")
+      .where("integrations.harvest.syncAllUsersTimesheets", "==", true)
+      .limit(1)
+      .get();
+    return !snap.empty;
+  } catch {
+    // If org settings cannot be read, fall back to current behavior
+    return true;
+  }
+}
+
 export async function runHarvestTimesheetSync(opts?: {
   uid?: string;
   days?: number;
   dry?: boolean;
 }): Promise<{ ok: true; processedUsers: number; entries: number }> {
   if (opts?.dry) return { ok: true, processedUsers: 0, entries: 0 } as const;
+
+  // Org-wide mode: only run when enabled in integrations settings
+  if (!opts?.uid) {
+    const enabled = await isOrgWideHarvestSyncEnabled();
+    if (!enabled) {
+      return { ok: true, processedUsers: 0, entries: 0 } as const;
+    }
+  }
 
   const days = Number(opts?.days || process.env.HARVEST_SYNC_DAYS || 30);
   const range = defaultRangeDays(days);

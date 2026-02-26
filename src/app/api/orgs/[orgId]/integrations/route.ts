@@ -41,11 +41,11 @@ export async function POST(
     }
 
     const body = await req.json();
-    const { jira, monday } = body || {};
+    const { jira, monday, harvest } = body || {};
     await adminDb
       .collection("orgs")
       .doc(orgId)
-      .set({ integrations: { jira, monday } }, { merge: true });
+      .set({ integrations: { jira, monday, harvest } }, { merge: true });
     return NextResponse.json({ ok: true });
   } catch (e) {
     const message =

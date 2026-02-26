@@ -100,7 +100,7 @@ export async function POST(req: NextRequest) {
       AXONCHAT_SYSTEM_PROMPT +
       (tone !== "none" ? `\n\n${toneModifierText(tone)}` : "") +
       (contextText ? `\n\nContext:\n${contextText}` : "") +
-      `\n\nWhen you reply, also include a short 'reasoning' note (high-level, not step-by-step) and an optional 'reasoningTitle'.`;
+      `\n\nSafety & accuracy:\n- Do NOT claim you created/updated tasks, calendar events, or timesheets unless the system explicitly confirms it.\n- If the user requests a change, respond with what you would do and ask for approval/confirmation.\n\nWhen you reply, also include a short 'reasoning' note (high-level, not step-by-step) and an optional 'reasoningTitle'.`;
 
     const cleanMessages = (body.messages || [])
       .filter((m: any) => m && (m.role === "user" || m.role === "assistant"))

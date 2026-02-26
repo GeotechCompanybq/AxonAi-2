@@ -192,6 +192,20 @@ async function fetchAndStoreForUser(uid: string, token: string) {
   }
 }
 
+async function isOrgWideJiraSyncEnabled(): Promise<boolean> {
+  try {
+    const snap = await adminDb
+      .collection("orgs")
+      .where("integrations.jira.syncAllUsers", "==", true)
+      .limit(1)
+      .get();
+    return !snap.empty;
+  } catch {
+    // If org settings cannot be read, fall back to current behavior
+    return true;
+  }
+}
+
 export async function runJiraSync(opts?: { uid?: string; dry?: boolean }) {
   if (opts?.dry) return { ok: true, processed: 0 } as const;
 
@@ -238,6 +252,12 @@ export async function runJiraSync(opts?: { uid?: string; dry?: boolean }) {
     if (!token) return { error: "No token", status: 400 } as const;
     await fetchAndStoreForUser(opts.uid, token);
     return { ok: true, processed: 1 } as const;
+  }
+
+  // Org-wide mode: only run when enabled in integrations settings
+  const enabled = await isOrgWideJiraSyncEnabled();
+  if (!enabled) {
+    return { ok: true, processed: 0 } as const;
   }
 
   // All users (Mongo first, Firestore fallback)

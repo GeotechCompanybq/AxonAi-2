@@ -71,7 +71,12 @@ type ChatMessage = {
     type?: "task_created" | "timesheet_updated" | "analysis" | "error" | "pending_action";
     data?: any;
     pendingAction?: {
-      type: "edit_timesheet" | "create_task" | "update_task" | "delete_entry";
+      type:
+        | "edit_timesheet"
+        | "create_task"
+        | "update_task"
+        | "delete_entry"
+        | "log_time";
       action: () => Promise<void>;
       details: any;
     };
@@ -587,6 +592,16 @@ What would you like to do?`,
     const lowerQuery = query.toLowerCase();
     const uid = (window as any).__AXON_UID__ || user?.uid;
 
+    // Log time (Harvest) — catch natural phrasing like "add 2 hours for X"
+    if (
+      lowerQuery.match(/\b(log|add)\b.*\b(\d+(\.\d+)?)\s*h(ours?)?\b/i) ||
+      lowerQuery.match(/\b(\d+(\.\d+)?)\s*h(ours?)?\b.*\b(log|add)\b/i) ||
+      lowerQuery.includes("time entry") ||
+      lowerQuery.includes("timesheet entry")
+    ) {
+      return await handleLogTime(query, uid);
+    }
+
     // Task creation
     if (lowerQuery.match(/\b(create|add|make|new)\s+(a\s+)?task/i)) {
       return await handleCreateTask(query, uid);
@@ -640,6 +655,349 @@ What would you like to do?`,
 
     // Default: Use AI chat
     return await handleAIChat(query);
+  }
+
+  function parseHoursFromText(text: string): number | null {
+    const m = text.match(/(\d+(?:\.\d+)?)\s*h(?:ours?)?\b/i);
+    if (!m) return null;
+    const n = Number(m[1]);
+    if (!Number.isFinite(n) || n <= 0) return null;
+    // sane bounds
+    if (n > 24) return null;
+    return n;
+  }
+
+  function parseSpentDateFromText(text: string): string {
+    const lower = text.toLowerCase();
+    const iso = text.match(/\b(20\d{2}-\d{2}-\d{2})\b/);
+    if (iso) return iso[1];
+    const today = new Date();
+    if (lower.includes("yesterday")) {
+      const d = new Date(today);
+      d.setDate(d.getDate() - 1);
+      return d.toISOString().slice(0, 10);
+    }
+    return today.toISOString().slice(0, 10);
+  }
+
+  function extractProjectHint(text: string): string | null {
+    const m = text.match(/\b(?:for|to|on)\s+([a-z0-9][a-z0-9 _-]{2,60})/i);
+    if (!m) return null;
+    let hint = m[1];
+    // stop at common trailing phrases
+    hint = hint.split(/\b(generate|create|make|task|i have|done|hours?|h)\b/i)[0];
+    hint = hint.trim().replace(/\s+/g, " ");
+    if (hint.length < 3) return null;
+    return hint;
+  }
+
+  function extractExplicitField(text: string, field: "project" | "task"): string | null {
+    const re = new RegExp(`\\b${field}\\s*:\\s*([^\\n]+)`, "i");
+    const m = text.match(re);
+    if (!m) return null;
+    const v = String(m[1] || "").trim();
+    return v.length >= 2 ? v : null;
+  }
+
+  function extractTaskHint(text: string, projectHint: string | null): string | null {
+    const explicit = extractExplicitField(text, "task");
+    if (explicit) return explicit;
+
+    const lower = text.toLowerCase();
+    const hoursStripped = lower.replace(/(\d+(?:\.\d+)?)\s*h(?:ours?)?\b/gi, "");
+    // If we have "for <project>", take the part before it as task-ish hint
+    if (projectHint) {
+      const idx = hoursStripped.indexOf(`for ${projectHint.toLowerCase()}`);
+      if (idx > 0) {
+        const prefix = text.slice(0, idx).trim();
+        const cleaned = prefix
+          .replace(/\b(log|add|create|make|time|entry|timesheet|hours?)\b/gi, "")
+          .replace(/[-–—]+/g, " ")
+          .trim()
+          .replace(/\s+/g, " ");
+        if (cleaned.length >= 3) return cleaned;
+      }
+    }
+
+    // Fallback: look for " - <task>" style
+    const dash = text.split(/[-–—]/).map((s) => s.trim()).filter(Boolean);
+    if (dash.length >= 2) {
+      const maybe = dash[dash.length - 1];
+      if (maybe.length >= 3) return maybe;
+    }
+    return null;
+  }
+
+  function scoreNameMatch(name: string, hint: string): number {
+    const n = name.toLowerCase();
+    const h = hint.toLowerCase().trim();
+    if (!h) return 0;
+    if (n === h) return 100;
+    if (n.startsWith(h)) return 80;
+    if (n.includes(h)) return 60;
+    // IMPORTANT: avoid fuzzy token overlap here.
+    // We only accept strong substring matches to prevent logging time to the wrong project/task.
+    return 0;
+  }
+
+  async function handleLogTime(
+    query: string,
+    uid: string | undefined
+  ): Promise<{ content: string; metadata?: any; isStreaming?: boolean }> {
+    if (!connections.harvest) {
+      return {
+        content:
+          `## ⚠️ Harvest not connected\n\nConnect Harvest in **Settings** and then try again.\n\nExample:\n- \`Log 2h on Accelanova for AI strategy\``,
+        metadata: { type: "error" },
+      };
+    }
+    if (!uid) {
+      return {
+        content: `## ⚠️ Login required\n\nPlease log in first, then try again.`,
+        metadata: { type: "error" },
+      };
+    }
+
+    const hours = parseHoursFromText(query);
+    if (!hours) {
+      return {
+        content: `Quick question: how many hours should I log? (e.g. \`2h\`, \`1.5h\`)`,
+      };
+    }
+    const spent_date = parseSpentDateFromText(query);
+    const explicitProject = extractExplicitField(query, "project");
+    const projectHint = explicitProject || extractProjectHint(query);
+    const taskHint = extractTaskHint(query, projectHint);
+    const notes = query
+      .replace(/\s+/g, " ")
+      .trim()
+      .slice(0, 1000);
+
+    // Resolve ONLY from available (assigned) Harvest projects + tasks
+    let project: { id: number; name: string } | null = null;
+    let task: { id: number; name: string } | null = null;
+    try {
+      const projRes = await fetch(
+        `/api/harvest/project-assignments?uid=${encodeURIComponent(String(uid))}`,
+        { credentials: "include" }
+      );
+      const projJson = await projRes.json().catch(() => ({}));
+      if (!projRes.ok) {
+        const msg =
+          (projJson && (projJson.error || projJson.message)) ||
+          `Failed to load Harvest project assignments (${projRes.status})`;
+        return {
+          content: `## ⚠️ Can’t load Harvest projects\n\n${String(msg)}\n\nTry reconnecting Harvest in **Settings** and then retry.`,
+          metadata: { type: "error" },
+        };
+      }
+      const projectsRaw = Array.isArray(projJson?.projects) ? projJson.projects : [];
+      const availableProjects = projectsRaw
+        .filter((p: any) => Boolean(p?.is_active) && p?.id && p?.name)
+        .map((p: any) => ({
+          id: Number(p.id),
+          name: String(p.name),
+          client: String(p.client || ""),
+        }));
+
+      // If Harvest returns no user assignments, fall back to account-wide active projects list.
+      // This still guarantees "available projects" (they exist in Harvest), but may still be rejected
+      // on create if your user isn't allowed to log to that project/task.
+      let projectsSource: "assignments" | "account" = "assignments";
+      let effectiveProjects = availableProjects;
+      if (!effectiveProjects.length) {
+        try {
+          const allRes = await fetch(
+            `/api/harvest/projects?uid=${encodeURIComponent(String(uid))}&all=1`,
+            { credentials: "include" }
+          );
+          const allJson = await allRes.json().catch(() => ({}));
+          if (allRes.ok) {
+            const allProjectsRaw = Array.isArray(allJson?.projects) ? allJson.projects : [];
+            const fromAccount = allProjectsRaw
+              .filter((p: any) => Boolean(p?.is_active) && p?.id && p?.name)
+              .map((p: any) => ({
+                id: Number(p.id),
+                name: String(p.name),
+                client: String(p.client || ""),
+              }));
+            if (fromAccount.length) {
+              effectiveProjects = fromAccount;
+              projectsSource = "account";
+            }
+          }
+        } catch {}
+      }
+
+      if (!effectiveProjects.length) {
+        return {
+          content:
+            `## ⚠️ No Harvest projects found\n\nI couldn’t find any active projects via Harvest.\n\nTry reconnecting Harvest in **Settings** and then retry.`,
+          metadata: { type: "error" },
+        };
+      }
+
+      if (projectHint) {
+        const scored = effectiveProjects
+          .map((p: any) => ({
+            p,
+            score:
+              Math.max(scoreNameMatch(p.name, projectHint), scoreNameMatch(p.client, projectHint)) +
+              (p.client ? 5 : 0),
+          }))
+          .sort((a: any, b: any) => b.score - a.score);
+        const best = scored[0];
+        // Require a minimum confidence to avoid wrong logs
+        if (best?.score >= 60 && (scoreNameMatch(best.p.name, projectHint) >= 60 || scoreNameMatch(best.p.client, projectHint) >= 60)) {
+          project = { id: best.p.id, name: best.p.name };
+        } else {
+          const options = scored.slice(0, 6).map((x: any, i: number) => {
+            const label = x.p.client ? `${x.p.client} · ${x.p.name}` : x.p.name;
+            return `${i + 1}. ${label}`;
+          });
+          return {
+            content:
+              `## Pick a Harvest project\n\nI only log time to **projects that exist in Harvest**.\n\nI couldn’t confidently match **"${projectHint}"**.\n\nReply with:\n- \`Project: <exact name>\`\n\nTop matches:\n${options.map((s: string) => `- ${s}`).join("\n")}\n\n_Source: ${projectsSource === "assignments" ? "your assigned projects" : "account project list"}_`,
+            metadata: { type: "analysis" },
+          };
+        }
+      } else {
+        const options = effectiveProjects.slice(0, 8).map((p: any, i: number) => {
+          const label = p.client ? `${p.client} · ${p.name}` : p.name;
+          return `${i + 1}. ${label}`;
+        });
+        return {
+          content:
+            `## Which Harvest project should I use?\n\nReply with:\n- \`Project: <exact name>\`\n\nExamples:\n${options.map((s: string) => `- ${s}`).join("\n")}\n\n_Source: ${projectsSource === "assignments" ? "your assigned projects" : "account project list"}_`,
+          metadata: { type: "analysis" },
+        };
+      }
+
+      // Resolve task for selected project from Harvest task assignments
+      const tasksRes = await fetch(
+        `/api/harvest/task-assignments?uid=${encodeURIComponent(String(uid))}&project_id=${encodeURIComponent(
+          String(project.id)
+        )}`,
+        { credentials: "include" }
+      );
+      const tasksJson = await tasksRes.json().catch(() => ({}));
+      const tasksRaw = Array.isArray(tasksJson?.tasks) ? tasksJson.tasks : [];
+      const availableTasks = tasksRaw
+        .filter((t: any) => Boolean(t?.is_active) && t?.id && t?.name)
+        .map((t: any) => ({ id: Number(t.id), name: String(t.name) }));
+
+      if (!availableTasks.length) {
+        return {
+          content:
+            `## ⚠️ No available tasks for this project\n\nProject: **${project.name}**\n\nThis project has no active task assignments in Harvest.\n\nPick another project or add a task assignment in Harvest.`,
+          metadata: { type: "error" },
+        };
+      }
+
+      if (taskHint) {
+        const scoredT = availableTasks
+          .map((t: any) => ({ t, score: scoreNameMatch(t.name, taskHint) }))
+          .sort((a: any, b: any) => b.score - a.score);
+        const bestT = scoredT[0];
+        if (bestT?.score >= 60 && scoreNameMatch(bestT.t.name, taskHint) >= 60) {
+          task = { id: bestT.t.id, name: bestT.t.name };
+        } else {
+          const opts = scoredT.slice(0, 8).map((x: any, i: number) => `${i + 1}. ${x.t.name}`);
+          return {
+            content:
+              `## Pick a Harvest task\n\nProject: **${project.name}**\n\nI couldn’t confidently match the task **"${taskHint}"**.\n\nReply with:\n- \`Task: <exact name>\`\n\nTop matches:\n${opts.map((s: string) => `- ${s}`).join("\n")}`,
+            metadata: { type: "analysis" },
+          };
+        }
+      } else {
+        const opts = availableTasks.slice(0, 10).map((t: any) => `- ${t.name}`);
+        return {
+          content:
+            `## Which Harvest task should I use?\n\nProject: **${project.name}**\n\nReply with:\n- \`Task: <exact name>\`\n\nExamples:\n${opts.join("\n")}`,
+          metadata: { type: "analysis" },
+        };
+      }
+    } catch {
+      // ignore
+    }
+
+    if (!project?.id || !task?.id) {
+      const hintLabel = projectHint ? ` (“${projectHint}”)` : "";
+      return {
+        content:
+          `## I can log that time — one quick detail\n\nI couldn’t reliably match the Harvest **project/task** from your message${hintLabel}.\n\nReply with:\n- **Project name** (exact)\n- **Task name** (exact)\n\nExample:\n- Project: Accelanova\n- Task: AI Strategy`,
+        metadata: { type: "analysis" },
+      };
+    }
+
+    const details = {
+      spent_date,
+      hours,
+      project_id: Number(project.id),
+      task_id: Number(task.id),
+      notes,
+      projectName: String(project.name || ""),
+      taskName: String(task.name || ""),
+    };
+
+    return {
+      content:
+        `## ⏱️ Pending time log\n\n- **Date**: ${details.spent_date}\n- **Hours**: ${details.hours}h\n- **Project**: ${details.projectName}\n- **Task**: ${details.taskName}\n\nApprove to create this Harvest time entry.`,
+      metadata: {
+        type: "pending_action",
+        pendingAction: {
+          type: "log_time",
+          details,
+          action: async () => {
+            try {
+              const res = await fetch(
+                `/api/harvest/timesheets?uid=${encodeURIComponent(String(uid))}`,
+                {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json" },
+                  credentials: "include",
+                  body: JSON.stringify({
+                    project_id: details.project_id,
+                    task_id: details.task_id,
+                    spent_date: details.spent_date,
+                    hours: details.hours,
+                    notes: details.notes,
+                  }),
+                }
+              );
+              const json = await res.json().catch(() => ({}));
+              if (!res.ok) {
+                throw new Error(
+                  (json && (json.error || json.message)) ||
+                    `Harvest error (${res.status})`
+                );
+              }
+
+              setMessages((prev) => [
+                ...prev,
+                {
+                  role: "assistant",
+                  content:
+                    `## ✅ Time logged\n\n- **${details.spent_date}** — ${details.hours}h · ${details.projectName} / ${details.taskName}\n\nWant me to pull your timesheets to confirm it’s there?`,
+                  timestamp: new Date(),
+                  metadata: { type: "timesheet_updated", data: { harvest: json } },
+                },
+              ]);
+            } catch (error) {
+              setMessages((prev) => [
+                ...prev,
+                {
+                  role: "assistant",
+                  content: `## ❌ Failed to log time\n\n${error instanceof Error ? error.message : "Unknown error"}`,
+                  timestamp: new Date(),
+                  metadata: { type: "error" },
+                },
+              ]);
+            }
+          },
+        },
+      },
+    };
   }
 
   async function handleCreateTask(query: string, uid: string | undefined): Promise<{ content: string; metadata?: any; isStreaming?: boolean }> {
@@ -968,8 +1326,8 @@ What would you like to do?`,
       const data = await res.json();
       const events = data.events || [];
 
-      let content = `📅 **Your Calendar (Next 7 Days)**\n\n`;
-      content += `**Total Events**: ${events.length}\n\n`;
+      let content = `## 📅 Your calendar (next 7 days)\n\n`;
+      content += `- **Total events**: ${events.length}\n\n`;
 
       if (events.length > 0) {
         // Group by date
@@ -984,13 +1342,17 @@ What would you like to do?`,
 
         byDate.forEach((dayEvents, date) => {
           const dateObj = new Date(date);
-          content += `**${dateObj.toLocaleDateString("en-US", { weekday: "long", month: "short", day: "numeric" })}**\n`;
+          content += `### ${dateObj.toLocaleDateString("en-US", {
+            weekday: "long",
+            month: "short",
+            day: "numeric",
+          })}\n`;
           dayEvents.forEach((event) => {
             const time = event.start?.dateTime
               ? new Date(event.start.dateTime).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" })
               : "All Day";
             const teams = event.isOnlineMeeting ? " (Teams)" : "";
-            content += `• ${time}: ${event.subject || "Untitled"}${teams}\n`;
+            content += `- **${time}** — ${event.subject || "Untitled"}${teams}\n`;
           });
           content += `\n`;
         });
@@ -1366,9 +1728,9 @@ What would you like to do?`,
       const results = data.results || [];
       const count = data.count || 0;
 
-      let content = `📊 **Database Query Results**\n\n`;
-      content += `**Collection**: ${collection}\n`;
-      content += `**Found**: ${count} ${count === 1 ? "record" : "records"}\n\n`;
+      let content = `## 📊 Database query results\n\n`;
+      content += `- **Collection**: \`${collection}\`\n`;
+      content += `- **Found**: ${count} ${count === 1 ? "record" : "records"}\n\n`;
 
       if (count === 0) {
         content += `No records found matching your query.`;
@@ -1376,28 +1738,28 @@ What would you like to do?`,
         // Format results based on collection type
         switch (collection) {
           case "tasks":
-            content += `**Tasks:**\n`;
+            content += `### Tasks\n`;
             results.slice(0, 10).forEach((task: any) => {
               const status = task.status === "done" ? "✅" : task.status === "inprogress" ? "🔄" : "📝";
               const priority = task.priority === "high" ? "🔴" : task.priority === "medium" ? "🟡" : "🟢";
-              content += `${status} ${priority} **${task.name}**\n`;
-              if (task.description) content += `  ${task.description.substring(0, 100)}${task.description.length > 100 ? "..." : ""}\n`;
-              if (task.dueDate) content += `  Due: ${task.dueDate}\n`;
-              content += `\n`;
+              content += `- ${status} ${priority} **${task.name}**\n`;
+              if (task.description)
+                content += `  - ${task.description.substring(0, 120)}${task.description.length > 120 ? "…" : ""}\n`;
+              if (task.dueDate) content += `  - Due: ${task.dueDate}\n`;
             });
             if (count > 10) content += `... and ${count - 10} more tasks\n`;
             break;
 
           case "timesheets":
-            content += `**Timesheet Entries:**\n`;
+            content += `### Timesheet entries\n`;
             const totalHours = results.reduce((sum: number, e: any) => sum + (Number(e.hours) || 0), 0);
-            content += `**Total Hours**: ${totalHours.toFixed(1)}h\n\n`;
+            content += `- **Total hours**: ${totalHours.toFixed(1)}h\n\n`;
             results.slice(0, 10).forEach((entry: any) => {
-              content += `• ${entry.spent_date}: ${entry.hours}h`;
-              if (entry.project) content += ` - ${entry.project}`;
-              if (entry.task) content += ` / ${entry.task}`;
-              if (entry.notes) content += `\n  _${entry.notes.substring(0, 50)}${entry.notes.length > 50 ? "..." : ""}_`;
-              content += `\n`;
+              const proj = entry.project ? String(entry.project) : "Unknown";
+              const task = entry.task ? String(entry.task) : "Unknown";
+              content += `- **${entry.spent_date || "Unknown"}** — ${Number(entry.hours || 0)}h · ${proj} / ${task}\n`;
+              if (entry.notes)
+                content += `  - _${String(entry.notes).substring(0, 80)}${String(entry.notes).length > 80 ? "…" : ""}_\n`;
             });
             if (count > 10) content += `... and ${count - 10} more entries\n`;
             break;
@@ -1415,21 +1777,22 @@ What would you like to do?`,
             break;
 
           case "timesheet_drafts":
-            content += `**Timesheet Drafts:**\n`;
+            content += `### Timesheet drafts\n`;
             results.slice(0, 10).forEach((draft: any) => {
-              content += `• ${draft.date || "Unknown"}: ${draft.hours || 0}h`;
-              if (draft.project) content += ` - ${draft.project}`;
-              if (draft.notes) content += `\n  _${draft.notes.substring(0, 50)}${draft.notes.length > 50 ? "..." : ""}_`;
+              content += `- **${draft.date || "Unknown"}** — ${draft.hours || 0}h`;
+              if (draft.project) content += ` · ${draft.project}`;
+              if (draft.notes)
+                content += `\n  - _${String(draft.notes).substring(0, 80)}${String(draft.notes).length > 80 ? "…" : ""}_`;
               content += `\n`;
             });
             break;
 
           case "chat_sessions":
-            content += `**Chat Sessions:**\n`;
+            content += `### Chat sessions\n`;
             results.forEach((session: any) => {
               const date = new Date(session.updatedAt).toLocaleDateString();
-              content += `• **${session.title}** (${session.messageCount} messages)\n`;
-              content += `  Last updated: ${date}\n\n`;
+              content += `- **${session.title}** (${session.messageCount} messages)\n`;
+              content += `  - Last updated: ${date}\n`;
             });
             break;
 

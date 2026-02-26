@@ -58,6 +58,43 @@ async function getHarvestAuth(
   }
 
   if (!token) return { error: "Not connected", status: 400 } as const;
+  if (!accountId) {
+    // Resolve accountId from Harvest accounts API (same behavior as other Harvest routes)
+    try {
+      const accountsRes = await fetch("https://id.getharvest.com/api/v2/accounts", {
+        headers: {
+          Authorization: `Bearer ${token}`,
+          Accept: "application/json",
+        },
+      });
+      const accountsJson = await accountsRes.json();
+      const first = Array.isArray(accountsJson?.accounts) ? accountsJson.accounts[0] : undefined;
+      if (first?.id) {
+        accountId = String(first.id);
+        const secureCookie = req.nextUrl.protocol === "https:" || process.env.NODE_ENV === "production";
+        const cookieStore2 = await cookies();
+        cookieStore2.set(isAlt ? "harvest_account_id_alt" : "harvest_account_id", accountId, {
+          httpOnly: true,
+          sameSite: "lax",
+          secure: secureCookie,
+          path: "/",
+          maxAge: 60 * 60 * 24 * 365,
+        });
+        if (uid) {
+          try {
+            const db = await getDb();
+            const { users } = getCollectionNames();
+            const field = isAlt ? "harvestAlt.accountId" : "harvest.accountId";
+            await db.collection(users).updateOne(
+              { uid },
+              { $set: { uid, [field]: accountId } as any },
+              { upsert: true }
+            );
+          } catch {}
+        }
+      }
+    } catch {}
+  }
   if (!accountId) return { error: "Missing Harvest account id", status: 400 } as const;
   return { token, accountId } as const;
 }
