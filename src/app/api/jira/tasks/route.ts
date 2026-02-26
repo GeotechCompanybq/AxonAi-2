@@ -30,16 +30,19 @@ async function fetchAccessibleSites(token: string): Promise<{ sites: any[]; auth
 }
 
 function transformJiraIssue(issue: any) {
+  const key = String(issue?.key || "");
+  const fields = issue?.fields || {};
   return {
-    name: issue.fields.summary,
-    description: `${issue.fields.description || ""}\n\nProject: ${
-      issue.fields.project.name
-    }\nType: ${issue.fields.issuetype.name}\nKey: ${issue.key}`,
-    dueDate: issue.fields.duedate,
-    status: mapJiraStatusToAppStatus(issue.fields.status.name),
-    priority: mapJiraPriorityToAppPriority(issue.fields.priority.name),
-    category: issue.fields.project.name,
-    externalId: issue.id, // Preserve Jira's unique issue ID
+    name: String(fields?.summary || "Untitled"),
+    description: `${fields?.description || ""}\n\nProject: ${
+      fields?.project?.name || ""
+    }\nType: ${fields?.issuetype?.name || ""}\nKey: ${key}`.trim(),
+    dueDate: fields?.duedate || null,
+    status: mapJiraStatusToAppStatus(String(fields?.status?.name || "")),
+    priority: mapJiraPriorityToAppPriority(String(fields?.priority?.name || "")),
+    category: fields?.project?.name || null,
+    externalId: String(issue?.id || key),
+    externalKey: key || null,
   };
 }
 
@@ -260,10 +263,83 @@ export async function GET(req: NextRequest) {
     const result = await fetchJiraTasks(token);
     if (result.authError) {
       return NextResponse.json(
-        { error: "Jira authentication expired. Please reconnect in Settings.", authError: true },
+        {
+          error: "Jira authentication expired. Please reconnect in Settings.",
+          authError: true,
+        },
         { status: 401 }
       );
     }
+
+    // When a uid is provided, also upsert tasks into the user's task collection
+    const uid = req.nextUrl.searchParams.get("uid") || undefined;
+    if (uid && Array.isArray(result.tasks) && result.tasks.length > 0) {
+      try {
+        const db = await getDb();
+        const { userTasks, users } = getCollectionNames();
+
+        const ops = result.tasks.map((t: any) => {
+          const key = `${t.externalId || t.externalKey || t.name}|jira`;
+          const id = Buffer.from(key).toString("base64").replace(/=+$/g, "");
+          const doc = {
+            uid,
+            id,
+            source: "jira",
+            name: t.name,
+            description: t.description,
+            dueDate: t.dueDate || null,
+            priority: t.priority,
+            status: t.status,
+            category: t.category,
+            externalId: t.externalId || null,
+            externalKey: t.externalKey || null,
+            updatedAt: new Date().toISOString(),
+          };
+          return {
+            updateOne: {
+              filter: { uid, id },
+              update: { $set: doc },
+              upsert: true,
+            },
+          } as const;
+        });
+
+        let newlyInserted = 0;
+        if (ops.length) {
+          const bulkRes: any = await db
+            .collection(userTasks)
+            .bulkWrite(ops as any, { ordered: false });
+          newlyInserted = Number(bulkRes?.upsertedCount || 0);
+        }
+
+        if (newlyInserted > 0) {
+          try {
+            const userDoc = await db.collection(users).findOne({ uid });
+            const email = (userDoc as any)?.email as string | undefined;
+            if (email) {
+              const previewNames = result.tasks
+                .slice(0, 3)
+                .map((t: any) => String(t?.name || "Untitled"))
+                .join(", ");
+              await EmailNotificationService.sendEmail({
+                to: email,
+                subject: `New tasks imported from Jira (${newlyInserted})`,
+                htmlBody: `
+                  <p>We imported <strong>${newlyInserted}</strong> new task(s) from Jira into your workspace.</p>
+                  <p style="color:#94a3b8;font-size:12px">Recent: ${previewNames}</p>
+                  <p><a href="/tasks">Open Tasks</a></p>
+                `,
+              });
+            }
+          } catch (e) {
+            console.error("Failed to send Jira new-tasks email", e);
+          }
+        }
+      } catch (e) {
+        console.error("Failed to upsert Jira tasks", e);
+      }
+    }
+
     return NextResponse.json({ tasks: result.tasks });
   } catch (e) {
     console.error("jira tasks error", e);

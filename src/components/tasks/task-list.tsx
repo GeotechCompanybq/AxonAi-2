@@ -31,6 +31,11 @@ import {
 import { Card, CardContent } from "@/components/ui/card"; // Added Card imports
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 
+type TaskListProps = {
+  sourceFilter?: string | string[];
+  hideCreate?: boolean;
+};
+
 // Sample initial tasks for demonstration - will be overridden by localStorage if present
 const fallbackInitialTasks: Task[] = [
   {
@@ -44,7 +49,8 @@ const fallbackInitialTasks: Task[] = [
   },
 ];
 
-export function TaskList() {
+export function TaskList(props: TaskListProps = {}) {
+  const { sourceFilter, hideCreate } = props;
   const [tasks, setTasks] = useState<Task[]>([]);
   const [isLoaded, setIsLoaded] = useState(false); // To prevent flicker with localStorage
   const [searchTerm, setSearchTerm] = useState("");
@@ -241,7 +247,21 @@ export function TaskList() {
     setEditingTask(null);
   };
 
-  const filteredTasks = tasks
+  const baseTasks = useMemo(() => {
+    if (!sourceFilter) return tasks;
+    const allowed =
+      typeof sourceFilter === "string"
+        ? new Set([sourceFilter])
+        : new Set(sourceFilter);
+    return tasks.filter((task: any) => {
+      const src = String(task?.source || "").toLowerCase();
+      // If no explicit source, treat as "local"/manual and only include when filter allows it
+      if (!src) return allowed.has("local");
+      return allowed.has(src);
+    });
+  }, [tasks, sourceFilter]);
+
+  const filteredTasks = baseTasks
     .filter((task) => {
       const matchesSearchTerm =
         task.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -320,9 +340,11 @@ export function TaskList() {
             </SelectContent>
           </Select>
         </div>
-        <Button onClick={handleOpenModalForNew} className="w-full sm:w-auto">
-          <PlusCircle className="mr-2 h-5 w-5" /> Add Task
-        </Button>
+        {!hideCreate && (
+          <Button onClick={handleOpenModalForNew} className="w-full sm:w-auto">
+            <PlusCircle className="mr-2 h-5 w-5" /> Add Task
+          </Button>
+        )}
       </div>
 
       {filteredTasks.length > 0 ? (
@@ -343,7 +365,7 @@ export function TaskList() {
             <ListChecksIcon className="mx-auto h-12 w-12 text-muted-foreground mb-4" />
             <h3 className="text-xl font-semibold">No tasks found</h3>
             <p className="text-muted-foreground">
-              {tasks.length > 0
+              {baseTasks.length > 0
                 ? "Try adjusting your filters or search term."
                 : "Get started by adding a new task or creating an AI schedule!"}
             </p>
@@ -351,7 +373,8 @@ export function TaskList() {
         </Card>
       )}
 
-      <Dialog open={isModalOpen} onOpenChange={setIsModalOpen}>
+      {!hideCreate && (
+        <Dialog open={isModalOpen} onOpenChange={setIsModalOpen}>
         <DialogContent className="sm:max-w-[425px]">
           <DialogHeader>
             <DialogTitle>
@@ -489,6 +512,7 @@ export function TaskList() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+      )}
     </div>
   );
 }

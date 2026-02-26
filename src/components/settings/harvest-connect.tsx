@@ -1,10 +1,8 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
-import { IconSpinner } from "@/components/icons";
 import { useAuth } from "@/hooks/use-auth";
+import { IntegrationCard } from "@/components/settings/integration-card";
 
 export function HarvestConnect({
   returnTo,
@@ -55,6 +53,7 @@ export function HarvestConnect({
       const url = new URL("/api/harvest/timesheets", window.location.origin);
       // Fetch all pages for a full import/confirmation
       url.searchParams.set("all", "1");
+      url.searchParams.set("sync", "1");
       if (isAlt) url.searchParams.set("conn", "alt");
       // Ensure uid is provided even if cookies are absent by reading from auth context or localStorage fallback
       let uidParam: string | undefined = user?.uid || undefined;
@@ -106,52 +105,33 @@ export function HarvestConnect({
     }
   }, [isAlt]);
 
+  const providerTitle = label || (isAlt ? "Grayquarter Harvest" : "Harvest");
+
   return (
-    <Card className="h-full rounded-2xl border border-white/10 bg-gradient-to-b from-slate-950/80 to-slate-900/40">
-      <CardContent className="flex h-full flex-col justify-between space-y-4 p-6">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <img 
-              src="/Intergrations/Harvest-New.png" 
-              alt="Harvest" 
-              className="h-8 w-auto object-contain"
-            />
-            <div>
-              <div className="text-sm font-medium">
-                {label || (isAlt ? "Grayquarter Harvest" : "Harvest")}
-              </div>
-              <div className="text-xs text-muted-foreground">
-                Connect to pull timesheets
-              </div>
-            </div>
-          </div>
-          <div className="flex gap-2">
-            <Button onClick={connect} variant="outline">
-              {connected ? "Reconnect" : "Connect"}
-            </Button>
-            <Button onClick={configure} variant="ghost">
-              Configure
-            </Button>
-            <Button onClick={pullTimesheets} disabled={isLoading}>
-              {isLoading ? (
-                <>
-                  <IconSpinner className="h-4 w-4" /> Fetching...
-                </>
-              ) : (
-                "Pull Timesheets"
-              )}
-            </Button>
-          </div>
-        </div>
-        {connected && (
-          <div className="text-xs">
-            <span className="text-emerald-600">Connected</span> to Harvest
-          </div>
-        )}
-        {status && (
-          <div className="text-xs text-muted-foreground">{status}</div>
-        )}
-      </CardContent>
-    </Card>
+    <IntegrationCard
+      logoSrc="/Intergrations/Harvest-New.png"
+      logoAlt={providerTitle}
+      title={providerTitle}
+      description="Connect to pull detailed Harvest timesheets into Axon."
+      isConnected={connected}
+      providerName={providerTitle}
+      primaryAction={{
+        label: connected ? "Reconnect" : "Connect",
+        onClick: connect,
+        variant: "outline",
+      }}
+      secondaryAction={{
+        label: "Configure",
+        onClick: configure,
+        variant: "ghost",
+      }}
+      tertiaryAction={{
+        label: isLoading ? "Fetching..." : "Pull Timesheets",
+        onClick: pullTimesheets,
+        disabled: isLoading,
+        loading: isLoading,
+      }}
+      statusText={status}
+    />
   );
 }

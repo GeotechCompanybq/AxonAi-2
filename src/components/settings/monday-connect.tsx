@@ -1,14 +1,12 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
-import { IconSpinner } from "@/components/icons";
 import { useAuth } from "@/hooks/use-auth";
 import type { Task, TaskStatus } from "@/types";
 import { saveTasksToLocalStorage } from "@/lib/task-storage";
 import { db } from "@/lib/firebase";
 import { doc, serverTimestamp, setDoc } from "firebase/firestore";
+import { IntegrationCard } from "@/components/settings/integration-card";
 
 export function MondayConnect({ returnTo }: { returnTo?: string }) {
   const { user } = useAuth();
@@ -213,49 +211,30 @@ export function MondayConnect({ returnTo }: { returnTo?: string }) {
   }, []);
 
   return (
-    <Card className="h-full rounded-2xl border border-white/10 bg-gradient-to-b from-slate-950/80 to-slate-900/40">
-      <CardContent className="flex h-full flex-col justify-between space-y-4 p-6">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <img 
-              src="/Intergrations/monday.png" 
-              alt="Monday.com" 
-              className="h-8 w-auto object-contain"
-            />
-            <div>
-              <div className="text-sm font-medium">Monday.com</div>
-              <div className="text-xs text-muted-foreground">
-                Connect to pull tasks and plan with AI
-              </div>
-            </div>
-          </div>
-          <div className="flex gap-2">
-            <Button onClick={connect} variant="outline">
-              {connected ? "Reconnect" : "Connect"}
-            </Button>
-            <Button onClick={configure} variant="ghost">
-              Configure
-            </Button>
-            <Button onClick={pullAndPlan} disabled={isLoading}>
-              {isLoading ? (
-                <>
-                  <IconSpinner className="h-4 w-4" /> Generating...
-                </>
-              ) : (
-                "Pull & Plan"
-              )}
-            </Button>
-          </div>
-        </div>
-        {connected && (
-          <div className="text-xs">
-            <span className="text-emerald-600">Connected</span> to Monday.com
-          </div>
-        )}
-        {status && (
-          <div className="text-xs text-muted-foreground">{status}</div>
-        )}
-      </CardContent>
-    </Card>
+    <IntegrationCard
+      logoSrc="/Intergrations/monday.png"
+      logoAlt="Monday.com"
+      title="Monday.com"
+      description="Connect to pull tasks and instantly generate plans with AI."
+      isConnected={connected}
+      providerName="Monday.com"
+      primaryAction={{
+        label: connected ? "Reconnect" : "Connect",
+        onClick: connect,
+        variant: "outline",
+      }}
+      secondaryAction={{
+        label: "Configure",
+        onClick: configure,
+        variant: "ghost",
+      }}
+      tertiaryAction={{
+        label: isLoading ? "Generating..." : "Pull & Plan",
+        onClick: pullAndPlan,
+        disabled: isLoading,
+        loading: isLoading,
+      }}
+      statusText={status}
+    />
   );
 }

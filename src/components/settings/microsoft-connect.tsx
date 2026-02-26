@@ -1,10 +1,8 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
-import { IconSpinner } from "@/components/icons";
 import { useAuth } from "@/hooks/use-auth";
+import { IntegrationCard } from "@/components/settings/integration-card";
 
 type CalendarEvent = {
   id: string;
@@ -86,72 +84,58 @@ export function MicrosoftConnect({ returnTo }: { returnTo?: string }) {
   }, []);
 
   return (
-    <Card className="h-full rounded-2xl border border-white/10 bg-gradient-to-b from-slate-950/80 to-slate-900/40">
-      <CardContent className="flex h-full flex-col justify-between space-y-4 p-6">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <img 
-              src="/Intergrations/microsoft.png" 
-              alt="Microsoft" 
-              className="h-8 w-auto object-contain"
-            />
-            <div>
-              <div className="text-sm font-medium">Microsoft / Teams Calendar</div>
-              <div className="text-xs text-muted-foreground">
-                Connect to pull your calendar events (Teams meetings are included)
+    <IntegrationCard
+      logoSrc="/Intergrations/microsoft.png"
+      logoAlt="Microsoft"
+      title="Microsoft / Teams Calendar"
+      description="Connect to pull your calendar events. Teams meetings are included."
+      isConnected={connected}
+      providerName="Microsoft"
+      primaryAction={{
+        label: connected ? "Reconnect" : "Connect",
+        onClick: connect,
+        variant: "outline",
+      }}
+      secondaryAction={{
+        label: "Configure",
+        onClick: configure,
+        variant: "ghost",
+      }}
+      tertiaryAction={{
+        label: isLoading ? "Fetching..." : "Pull Calendar",
+        onClick: pullCalendar,
+        disabled: isLoading || !user?.uid,
+        loading: isLoading,
+      }}
+      statusText={status}
+    >
+      {events && events.length > 0 ? (
+        <div className="space-y-1">
+          {events.slice(0, 5).map((event) => (
+            <div
+              key={event.id}
+              className="flex items-center justify-between gap-3"
+            >
+              <div className="truncate">
+                {event.subject || "Untitled"}
               </div>
+              {event.isOnlineMeeting && event.onlineMeetingUrl ? (
+                <a
+                  className="shrink-0 text-xs underline"
+                  href={event.onlineMeetingUrl}
+                  target="_blank"
+                  rel="noreferrer"
+                >
+                  Join
+                </a>
+              ) : null}
             </div>
-          </div>
-          <div className="flex gap-2">
-            <Button onClick={connect} variant="outline">
-              {connected ? "Reconnect" : "Connect"}
-            </Button>
-            <Button onClick={configure} variant="ghost">
-              Configure
-            </Button>
-            <Button onClick={pullCalendar} disabled={isLoading || !user?.uid}>
-              {isLoading ? (
-                <>
-                  <IconSpinner className="h-4 w-4" /> Fetching...
-                </>
-              ) : (
-                "Pull Calendar"
-              )}
-            </Button>
-          </div>
+          ))}
+          {events.length > 5 && (
+            <div>…and {events.length - 5} more</div>
+          )}
         </div>
-
-        {connected && (
-          <div className="text-xs">
-            <span className="text-emerald-600">Connected</span> to Microsoft
-          </div>
-        )}
-
-        {status && <div className="text-xs text-muted-foreground">{status}</div>}
-
-        {events && events.length > 0 && (
-          <div className="text-xs text-muted-foreground space-y-1">
-            {events.slice(0, 5).map((e) => (
-              <div key={e.id} className="flex items-center justify-between gap-3">
-                <div className="truncate">{e.subject || "Untitled"}</div>
-                {e.isOnlineMeeting && e.onlineMeetingUrl ? (
-                  <a
-                    className="shrink-0 underline"
-                    href={e.onlineMeetingUrl}
-                    target="_blank"
-                    rel="noreferrer"
-                  >
-                    Join
-                  </a>
-                ) : null}
-              </div>
-            ))}
-            {events.length > 5 && <div>…and {events.length - 5} more</div>}
-          </div>
-        )}
-      </CardContent>
-    </Card>
+      ) : null}
+    </IntegrationCard>
   );
 }
-
-
