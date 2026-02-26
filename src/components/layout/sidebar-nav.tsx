@@ -42,7 +42,15 @@ const navCore: NavItem[] = [
 
 const navPlanning: NavItem[] = [
   { href: "/schedule/create", label: "Axon Chat", icon: CalendarPlus },
-  { href: "/tasks", label: "My Tasks", icon: ListChecks },
+  {
+    href: "/tasks",
+    label: "My Tasks",
+    icon: ListChecks,
+    submenu: [
+      { href: "/tasks", label: "All Tasks" },
+      { href: "/tasks/jira", label: "Jira Tasks" },
+    ],
+  },
   { href: "/calendar", label: "Calendar", icon: CalendarDays },
 ];
 
