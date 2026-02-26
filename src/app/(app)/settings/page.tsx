@@ -35,11 +35,17 @@ export default function SettingsPage() {
         </CardContent>
       </Card>
 
-      <MicrosoftConnect returnTo="/settings" />
-      <MondayConnect />
-      <JiraConnect />
-      <HarvestConnect returnTo="/settings" />
-      <HarvestConnect returnTo="/settings" conn="alt" label="Grayquarter Harvest" />
+      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+        <MicrosoftConnect returnTo="/settings" />
+        <MondayConnect />
+        <JiraConnect />
+        <HarvestConnect returnTo="/settings" />
+        <HarvestConnect
+          returnTo="/settings"
+          conn="alt"
+          label="Grayquarter Harvest"
+        />
+      </div>
     </div>
   );
 }

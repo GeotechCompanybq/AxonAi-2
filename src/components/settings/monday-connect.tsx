@@ -202,9 +202,19 @@ export function MondayConnect({ returnTo }: { returnTo?: string }) {
     }
   }, [user]);
 
+  const configure = useCallback(() => {
+    try {
+      const url = new URL("/org/settings", window.location.origin);
+      url.searchParams.set("source", "monday");
+      window.location.href = url.toString();
+    } catch {
+      window.location.href = "/org/settings";
+    }
+  }, []);
+
   return (
-    <Card>
-      <CardContent className="py-6 space-y-3">
+    <Card className="h-full rounded-2xl border border-white/10 bg-gradient-to-b from-slate-950/80 to-slate-900/40">
+      <CardContent className="flex h-full flex-col justify-between space-y-4 p-6">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
             <img 
@@ -222,6 +232,9 @@ export function MondayConnect({ returnTo }: { returnTo?: string }) {
           <div className="flex gap-2">
             <Button onClick={connect} variant="outline">
               {connected ? "Reconnect" : "Connect"}
+            </Button>
+            <Button onClick={configure} variant="ghost">
+              Configure
             </Button>
             <Button onClick={pullAndPlan} disabled={isLoading}>
               {isLoading ? (
