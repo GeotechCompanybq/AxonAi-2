@@ -99,76 +99,67 @@ async function fetchJiraTasks(token: string): Promise<{ tasks: any[]; authError?
   for (const site of sites) {
     const cloudId = String(site?.id || "");
     if (!cloudId) continue;
-    let startAt = 0;
-    const maxResults = 100;
-    let total = Infinity;
 
-    while (startAt < total) {
-      const searchUrl = new URL(
-        `https://api.atlassian.com/ex/jira/${cloudId}/rest/api/3/search/jql`
-      );
-      // Build robust JQL: use statusCategory to avoid custom status names,
-      // and match either currentUser() or the explicit accountId.
-      const jqlParts = [
-        "statusCategory != Done",
-        meAccountId
-          ? `(assignee = currentUser() OR assignee in (accountId(\"${meAccountId}\")))`
-          : "assignee = currentUser()",
-      ];
-      const jql = `${jqlParts.join(" AND ")} ORDER BY updated DESC`;
+    const searchUrl = new URL(
+      `https://api.atlassian.com/ex/jira/${cloudId}/rest/api/3/search/jql`
+    );
+    // Build robust JQL: use statusCategory to avoid custom status names,
+    // and match either currentUser() or the explicit accountId.
+    const jqlParts = [
+      "statusCategory != Done",
+      meAccountId
+        ? `(assignee = currentUser() OR assignee in (accountId(\"${meAccountId}\")))`
+        : "assignee = currentUser()",
+    ];
+    const jql = `${jqlParts.join(" AND ")} ORDER BY updated DESC`;
 
-      const searchRes = await fetch(searchUrl, {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${token}`,
-          "Content-Type": "application/json",
-          Accept: "application/json",
-          "X-Atlassian-Token": "no-check",
-        },
-        body: JSON.stringify({
-          // Prefer statusCategory and include explicit accountId fallback
-          jql,
-          startAt,
-          maxResults,
-          fields: [
-            "summary",
-            "description",
-            "status",
-            "priority",
-            "duedate",
-            "project",
-            "issuetype",
-            "assignee", // Add assignee to verify
-          ],
-        }),
-      });
+    searchUrl.searchParams.set("jql", jql);
+    searchUrl.searchParams.set("maxResults", "100");
+    searchUrl.searchParams.set(
+      "fields",
+      [
+        "summary",
+        "description",
+        "status",
+        "priority",
+        "duedate",
+        "project",
+        "issuetype",
+        "assignee",
+      ].join(",")
+    );
 
-      if (!searchRes.ok) {
-        console.error(`Failed to fetch Jira tasks: ${searchRes.status}`);
-        break;
-      }
+    const searchRes = await fetch(searchUrl, {
+      method: "GET",
+      headers: {
+        Authorization: `Bearer ${token}`,
+        Accept: "application/json",
+        "X-Atlassian-Token": "no-check",
+      },
+    });
 
-      const searchData = await searchRes.json();
-      total = searchData.total;
-
-      // Log task details for verification
-      console.log(
-        `Retrieved ${searchData.issues.length} tasks from ${site.name}`
-      );
-      searchData.issues.forEach((issue: any) => {
-        console.log(`- Task: ${issue.key} - ${issue.fields.summary}`);
-        // Optional: Log assignee details for extra verification
-        console.log(
-          `  Assignee: ${issue.fields.assignee?.displayName || "Unknown"}`
-        );
-      });
-
-      const siteTasks = searchData.issues.map(transformJiraIssue);
-      allTasks.push(...siteTasks);
-
-      startAt += maxResults;
-      if (searchData.issues.length < maxResults) break;
+    if (!searchRes.ok) {
+      console.error(`Failed to fetch Jira tasks: ${searchRes.status}`);
+      continue;
     }
+
+    const searchData = await searchRes.json();
+
+    // Log task details for verification
+    const issues = Array.isArray((searchData as any)?.issues)
+      ? (searchData as any).issues
+      : [];
+    console.log(`Retrieved ${issues.length} tasks from ${site.name}`);
+    issues.forEach((issue: any) => {
+      console.log(`- Task: ${issue.key} - ${issue.fields.summary}`);
+      // Optional: Log assignee details for extra verification
+      console.log(
+        `  Assignee: ${issue.fields.assignee?.displayName || "Unknown"}`
+      );
+    });
+
+    const siteTasks = issues.map(transformJiraIssue);
+    allTasks.push(...siteTasks);
   }
 
   console.log(`Total tasks retrieved: ${allTasks.length}`);
