@@ -83,6 +83,25 @@ export function MicrosoftConnect({ returnTo }: { returnTo?: string }) {
     }
   }, []);
 
+  const disconnect = useCallback(async () => {
+    if (!user?.uid) return;
+    setIsLoading(true);
+    setStatus(null);
+    try {
+      const url = new URL("/api/microsoft/disconnect", window.location.origin);
+      url.searchParams.set("uid", user.uid);
+      const res = await fetch(url.toString(), { method: "POST" });
+      if (!res.ok) throw new Error("Failed to disconnect Microsoft");
+      setConnected(false);
+      setEvents(null);
+      setStatus("Disconnected from Microsoft. You can reconnect at any time.");
+    } catch (e: any) {
+      setStatus(e?.message || "Failed to disconnect Microsoft");
+    } finally {
+      setIsLoading(false);
+    }
+  }, [user?.uid]);
+
   return (
     <IntegrationCard
       logoSrc="/Intergrations/microsoft.png"
@@ -91,21 +110,34 @@ export function MicrosoftConnect({ returnTo }: { returnTo?: string }) {
       description="Connect to pull your calendar events. Teams meetings are included."
       isConnected={connected}
       providerName="Microsoft"
-      primaryAction={{
-        label: connected ? "Reconnect" : "Connect",
-        onClick: connect,
-        variant: "outline",
-      }}
+      primaryAction={
+        connected
+          ? {
+              label: "Disconnect",
+              onClick: disconnect,
+              variant: "outline",
+              size: "sm",
+              className: "border-destructive/40 text-destructive hover:bg-destructive/5",
+            }
+          : {
+              label: "Connect",
+              onClick: connect,
+              variant: "outline",
+              size: "sm",
+            }
+      }
       secondaryAction={{
         label: "Configure",
         onClick: configure,
         variant: "ghost",
+        size: "sm",
       }}
       tertiaryAction={{
         label: isLoading ? "Fetching..." : "Pull Calendar",
         onClick: pullCalendar,
         disabled: isLoading || !user?.uid,
         loading: isLoading,
+        size: "sm",
       }}
       statusText={status}
     >
