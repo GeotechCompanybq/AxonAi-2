@@ -43,7 +43,7 @@ export function IntegrationCard({
   children,
 }: IntegrationCardProps) {
   return (
-    <Card className="h-full rounded-2xl border border-white/10 bg-gradient-to-b from-slate-950/80 to-slate-900/40 shadow-sm transition hover:border-white/20 hover:shadow-lg">
+    <Card className="h-full rounded-2xl border-border/50 bg-card/60 text-card-foreground shadow-[0_18px_45px_rgba(0,0,0,0.45)] transition hover:border-border hover:shadow-[0_22px_60px_rgba(0,0,0,0.6)]">
       <CardContent className="flex h-full flex-col justify-between gap-4 p-6">
         <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
           <div className="flex flex-1 items-center gap-3">

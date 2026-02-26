@@ -97,14 +97,16 @@ async function fetchJiraTasks(token: string): Promise<{ tasks: any[]; authError?
   );
 
   for (const site of sites) {
-    const baseUrl = site.url;
-    const cloudId = site.id;
+    const cloudId = String(site?.id || "");
+    if (!cloudId) continue;
     let startAt = 0;
     const maxResults = 100;
     let total = Infinity;
 
     while (startAt < total) {
-      const searchUrl = new URL(`${baseUrl}/rest/api/3/search`);
+      const searchUrl = new URL(
+        `https://api.atlassian.com/ex/jira/${cloudId}/rest/api/3/search`
+      );
       // Build robust JQL: use statusCategory to avoid custom status names,
       // and match either currentUser() or the explicit accountId.
       const jqlParts = [
