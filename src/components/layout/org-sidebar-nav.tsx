@@ -2,7 +2,13 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { LayoutDashboard, BarChart3, Settings, ListChecks } from "lucide-react";
+import {
+  LayoutDashboard,
+  BarChart3,
+  Settings,
+  ListChecks,
+  Gauge,
+} from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
   SidebarMenu,
@@ -13,6 +19,7 @@ import {
 } from "@/components/ui/sidebar";
 
 const mainNavItems = [
+  { href: "/org/overview", label: "Org Overview", icon: Gauge },
   { href: "/org/dashboard", label: "Org Dashboard", icon: LayoutDashboard },
   { href: "/org/analytics", label: "Org Analytics", icon: BarChart3 },
   { href: "/org/tasks", label: "Org Tasks", icon: ListChecks },
