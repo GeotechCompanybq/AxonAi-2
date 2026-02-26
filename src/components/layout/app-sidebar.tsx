@@ -1,26 +1,75 @@
 "use client";
 
 import Link from "next/link";
+import { usePathname, useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { SidebarNav } from "./sidebar-nav";
 import { LogoImg } from "@/components/icons";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { LogOut } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
+import { useCurrentOrgId } from "@/hooks/use-current-org-id";
+import { cn } from "@/lib/utils";
 
 export function AppSidebar() {
   const { user, logout } = useAuth();
+  const { orgId } = useCurrentOrgId();
+  const pathname = usePathname();
+  const router = useRouter();
 
   const initials =
     (user?.displayName?.trim()?.[0] || user?.email?.trim()?.[0] || "A").toUpperCase();
 
+  const goPersonalWorkspace = () => {
+    router.push("/dashboard");
+  };
+
+  const goOrgWorkspace = () => {
+    const base = "/org/dashboard";
+    const url =
+      orgId && !pathname?.includes("onboarding")
+        ? `${base}?orgId=${encodeURIComponent(orgId)}`
+        : base;
+    router.push(url);
+  };
+
+  const isOrgWorkspace = pathname?.startsWith("/org");
+
   return (
     <div className="flex flex-col h-full w-full border-r border-sidebar-border/40 bg-[linear-gradient(180deg,rgba(255,255,255,0.06),rgba(255,255,255,0.02))] shadow-[0_20px_80px_rgba(0,0,0,0.4)]">
-      {/* Header with Logo */}
-      <div className="p-4 border-b border-white/5">
+      {/* Header with Logo + workspace switcher */}
+      <div className="p-4 border-b border-white/5 space-y-3">
         <Link href="/dashboard" className="flex items-center">
           <LogoImg className="h-12 w-auto" />
         </Link>
+        <div className="flex items-center justify-center">
+          <div className="inline-flex items-center rounded-2xl bg-white/5 p-1 text-xs shadow-[0_10px_30px_rgba(0,0,0,0.25)]">
+            <button
+              type="button"
+              onClick={goPersonalWorkspace}
+              className={cn(
+                "px-3 py-1.5 rounded-xl transition text-xs",
+                !isOrgWorkspace
+                  ? "bg-primary text-primary-foreground shadow-[0_0_20px_rgba(56,189,248,0.6)]"
+                  : "text-muted-foreground hover:text-foreground"
+              )}
+            >
+              Personal
+            </button>
+            <button
+              type="button"
+              onClick={goOrgWorkspace}
+              className={cn(
+                "px-3 py-1.5 rounded-xl transition text-xs",
+                isOrgWorkspace
+                  ? "bg-slate-900/80 text-slate-50 shadow-[0_0_20px_rgba(15,23,42,0.8)]"
+                  : "text-muted-foreground hover:text-foreground"
+              )}
+            >
+              Organization
+            </button>
+          </div>
+        </div>
       </div>
 
       {/* Navigation */}

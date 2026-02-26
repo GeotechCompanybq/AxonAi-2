@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { usePathname, useRouter } from "next/navigation";
 import {
   Sidebar,
   SidebarHeader,
@@ -16,13 +17,33 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { ChevronLeft, ChevronRight, LogOut } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
 import { OrgSidebarNav } from "./org-sidebar-nav";
+import { useCurrentOrgId } from "@/hooks/use-current-org-id";
+import { cn } from "@/lib/utils";
 
 export function OrgSidebar() {
   const { user, logout } = useAuth();
   const { state, toggleSidebar } = useSidebar();
+  const { orgId } = useCurrentOrgId();
+  const pathname = usePathname();
+  const router = useRouter();
 
   const initials =
     (user?.displayName?.trim()?.[0] || user?.email?.trim()?.[0] || "A").toUpperCase();
+
+  const goPersonalWorkspace = () => {
+    router.push("/dashboard");
+  };
+
+  const goOrgWorkspace = () => {
+    const base = "/org/dashboard";
+    const url =
+      orgId && !pathname?.includes("onboarding")
+        ? `${base}?orgId=${encodeURIComponent(orgId)}`
+        : base;
+    router.push(url);
+  };
+
+  const isOrgWorkspace = pathname?.startsWith("/org");
 
   return (
     <Sidebar
@@ -71,6 +92,35 @@ export function OrgSidebar() {
               <ChevronLeft className="h-4 w-4" />
             )}
           </Button>
+        </div>
+
+        <div className="mt-4 flex items-center justify-center group-data-[collapsible=icon]:hidden">
+          <div className="inline-flex items-center rounded-2xl bg-white/5 p-1 text-xs shadow-[0_10px_30px_rgba(0,0,0,0.25)]">
+            <button
+              type="button"
+              onClick={goPersonalWorkspace}
+              className={cn(
+                "px-3 py-1.5 rounded-xl transition text-xs",
+                !isOrgWorkspace
+                  ? "bg-primary text-primary-foreground shadow-[0_0_20px_rgba(56,189,248,0.6)]"
+                  : "text-muted-foreground hover:text-foreground"
+              )}
+            >
+              Personal
+            </button>
+            <button
+              type="button"
+              onClick={goOrgWorkspace}
+              className={cn(
+                "px-3 py-1.5 rounded-xl transition text-xs",
+                isOrgWorkspace
+                  ? "bg-slate-900/80 text-slate-50 shadow-[0_0_20px_rgba(15,23,42,0.8)]"
+                  : "text-muted-foreground hover:text-foreground"
+              )}
+            >
+              Organization
+            </button>
+          </div>
         </div>
       </SidebarHeader>
       <SidebarContent className="flex-1 p-0">
