@@ -47,10 +47,11 @@ async function handleMessageTurn(context: TurnContext) {
     await context.sendActivity(
       [
         "**Here’s what I understand right now:**",
-        "- **plan today** – outline how to create a daily plan from your Jira / Monday tasks (Axon app).",
-        "- **sync org jira** – explain and (later) trigger org-wide Jira sync.",
-        "- **summarize last meeting** – summarize your latest Loom / Teams transcript (coming soon).",
-        "- Or just chat and I’ll echo back while we wire deeper Axon logic.",
+        "- **plan today** – daily plan from your Jira / Monday tasks.",
+        "- **sync org jira** – (admins) org-wide Jira sync.",
+        "- **summarize last meeting** – Loom / Teams transcript summary (coming soon).",
+        "- **monday**, **jira**, **harvest**, **calendar** – quick info on each integration.",
+        "- Or chat and I’ll echo back; type **help** anytime.",
       ].join("\n")
     );
     return;
@@ -108,6 +109,38 @@ async function handleMessageTurn(context: TurnContext) {
         "",
         "_Framework stub_: fetch the most recent transcript via your Loom / Microsoft integrations, send it to your AI summarizer, then post the summary back into this chat.",
       ].join("\n")
+    );
+    return;
+  }
+
+  // Single-word integration hints (e.g. "monday", "jira", "harvest").
+  if (lower === "monday" || lower === "monday.com") {
+    await context.sendActivity(
+      "**Monday.com** in Axon: connect in Settings, then use **plan today** to build a daily plan from your Monday boards. I can later pull your Monday tasks here — type **help** for more."
+    );
+    return;
+  }
+  if (lower === "jira") {
+    await context.sendActivity(
+      "**Jira** in Axon: connect in Settings; use **plan today** for a plan from your issues, or **sync org jira** (admins) to refresh org-wide. Type **help** for all commands."
+    );
+    return;
+  }
+  if (lower === "harvest") {
+    await context.sendActivity(
+      "**Harvest** in Axon: connect in Settings to sync timesheets. I can’t pull timesheets from here yet — use the Axon app. Type **help** for more."
+    );
+    return;
+  }
+  if (lower === "loom" || lower === "transcript") {
+    await context.sendActivity(
+      "**Loom / transcripts**: say **summarize last meeting** and I’ll (once wired) summarize your latest meeting transcript. Type **help** for commands."
+    );
+    return;
+  }
+  if (lower === "calendar" || lower === "teams" || lower === "schedule") {
+    await context.sendActivity(
+      "I can help with **calendar** and **schedule**: try **plan today** or **what’s my schedule** to combine meetings and tasks. Type **help** for more."
     );
     return;
   }
