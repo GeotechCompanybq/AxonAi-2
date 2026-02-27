@@ -34,7 +34,11 @@ async function handleMessageTurn(context: TurnContext) {
   }
 
   const isGreeting =
-    ["hi", "hey", "hello"].includes(lower) || lower.startsWith("good ");
+    ["hi", "hey", "hello"].includes(lower) ||
+    lower.startsWith("good ") ||
+    /^hi\b/.test(lower) ||
+    /^hello\b/.test(lower) ||
+    /^hey\b/.test(lower);
 
   if (isGreeting) {
     await context.sendActivity(
@@ -156,8 +160,8 @@ export async function handleTeamsTurn(context: TurnContext) {
     if (context.activity.type === "conversationUpdate") {
       const membersAdded = context.activity.membersAdded || [];
       const botId = context.activity.recipient?.id;
-      const isBotAdded = membersAdded.some((m) => m.id === botId);
-      if (isBotAdded) {
+      const nonBotMembersAdded = membersAdded.filter((m) => m.id !== botId);
+      if (nonBotMembersAdded.length > 0) {
         await context.sendActivity(
           [
             "Hi, I’m Axon AI for Teams 👋",
