@@ -4,6 +4,7 @@ import {
   ConversationState,
   MemoryStorage,
   TurnContext,
+  createBotFrameworkAuthenticationFromConfiguration,
 } from "botbuilder";
 
 const credentialsFactory = new ConfigurationServiceClientCredentialFactory({
@@ -13,7 +14,10 @@ const credentialsFactory = new ConfigurationServiceClientCredentialFactory({
   MicrosoftAppTenantId: process.env.MICROSOFT_BOT_TENANT_ID ?? "",
 });
 
-export const teamsBotAdapter = new CloudAdapter(credentialsFactory);
+const botFrameworkAuthentication =
+  createBotFrameworkAuthenticationFromConfiguration(null, credentialsFactory);
+
+export const teamsBotAdapter = new CloudAdapter(botFrameworkAuthentication);
 
 const memoryStorage = new MemoryStorage();
 const conversationState = new ConversationState(memoryStorage);
