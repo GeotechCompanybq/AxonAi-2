@@ -30,6 +30,8 @@ type IntegrationCardProps = {
   tertiaryAction?: ActionConfig;
   statusText?: string | null;
   children?: ReactNode;
+  metaLeft?: ReactNode;
+  metaRight?: ReactNode;
 };
 
 export function IntegrationCard({
@@ -44,6 +46,8 @@ export function IntegrationCard({
   tertiaryAction,
   statusText,
   children,
+  metaLeft,
+  metaRight,
 }: IntegrationCardProps) {
   return (
     <Card className="h-full rounded-2xl border-border/50 bg-card/60 text-card-foreground shadow-[0_18px_45px_rgba(0,0,0,0.45)] transition hover:border-border hover:shadow-[0_22px_60px_rgba(0,0,0,0.6)]">
@@ -131,14 +135,25 @@ export function IntegrationCard({
           </div>
         </div>
 
-        <div className="space-y-2">
-          {statusText && (
-            <div className="text-xs text-muted-foreground">{statusText}</div>
-          )}
-          {children && (
-            <div className="mt-1 text-xs text-muted-foreground">{children}</div>
-          )}
-        </div>
+        {(statusText || metaLeft || metaRight || children) && (
+          <div className="space-y-2">
+            {(statusText || metaLeft || metaRight) && (
+              <div className="flex items-center justify-between border-t border-border/40 pt-3 text-xs text-muted-foreground">
+                <div className="truncate">
+                  {metaLeft ?? statusText}
+                </div>
+                {metaRight ? (
+                  <div className="shrink-0 pl-3">{metaRight}</div>
+                ) : null}
+              </div>
+            )}
+            {children && (
+              <div className="mt-1 text-xs text-muted-foreground">
+                {children}
+              </div>
+            )}
+          </div>
+        )}
       </CardContent>
     </Card>
   );

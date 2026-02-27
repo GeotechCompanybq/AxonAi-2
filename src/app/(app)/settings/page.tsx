@@ -10,6 +10,7 @@ import { MondayConnect } from "@/components/settings/monday-connect";
 import { JiraConnect } from "@/components/settings/jira-connect";
 import { HarvestConnect } from "@/components/settings/harvest-connect";
 import { MicrosoftConnect } from "@/components/settings/microsoft-connect";
+import { LoomConnect } from "@/components/settings/loom-connect";
 
 export default function SettingsPage() {
   return (
@@ -37,6 +38,7 @@ export default function SettingsPage() {
 
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
         <MicrosoftConnect returnTo="/settings" />
+        <LoomConnect returnTo="/settings" />
         <MondayConnect />
         <JiraConnect />
         <HarvestConnect returnTo="/settings" />

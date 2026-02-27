@@ -73,6 +73,17 @@ export function MicrosoftConnect({ returnTo }: { returnTo?: string }) {
     }
   }, [user?.uid]);
 
+  const viewSyncLogs = useCallback(() => {
+    try {
+      const url = new URL("/sync-logs", window.location.origin);
+      url.searchParams.set("source", "microsoft-calendar");
+      if (user?.uid) url.searchParams.set("uid", user.uid);
+      window.location.href = url.toString();
+    } catch {
+      window.location.href = "/sync-logs";
+    }
+  }, [user?.uid]);
+
   const configure = useCallback(() => {
     try {
       const url = new URL("/org/settings", window.location.origin);
@@ -140,6 +151,19 @@ export function MicrosoftConnect({ returnTo }: { returnTo?: string }) {
         size: "sm",
       }}
       statusText={status}
+      metaRight={
+        connected
+          ? (
+              <button
+                type="button"
+                className="text-xs font-medium text-primary hover:underline"
+                onClick={viewSyncLogs}
+              >
+                View Sync Logs
+              </button>
+            )
+          : null
+      }
     >
       {events && events.length > 0 ? (
         <div className="space-y-1">

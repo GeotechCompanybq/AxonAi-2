@@ -48,10 +48,14 @@ export async function POST(
 
     const body = await req.json();
     const { jira, monday, harvest } = body || {};
+    const integrations: Record<string, unknown> = {};
+    if (jira !== undefined) integrations.jira = jira;
+    if (monday !== undefined) integrations.monday = monday;
+    if (harvest !== undefined) integrations.harvest = harvest;
     await adminDb
       .collection("orgs")
       .doc(orgId)
-      .set({ integrations: { jira, monday, harvest } }, { merge: true });
+      .set({ integrations }, { merge: true });
     return NextResponse.json({ ok: true });
   } catch (e) {
     const message =
