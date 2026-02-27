@@ -23,7 +23,8 @@ const memoryStorage = new MemoryStorage();
 const conversationState = new ConversationState(memoryStorage);
 
 async function handleMessageTurn(context: TurnContext) {
-  const text = (context.activity.text || "").trim();
+  const raw = (context.activity.text || "").replace(/[\u200B-\u200D\uFEFF]/g, "");
+  const text = raw.trim();
   const lower = text.toLowerCase();
 
   if (!text) {
@@ -161,14 +162,17 @@ export async function handleTeamsTurn(context: TurnContext) {
       const membersAdded = context.activity.membersAdded || [];
       const botId = context.activity.recipient?.id;
       const nonBotMembersAdded = membersAdded.filter((m) => m.id !== botId);
-      if (nonBotMembersAdded.length > 0) {
+      const botWasAdded = botId
+        ? membersAdded.some((m) => m.id === botId)
+        : false;
+      if (nonBotMembersAdded.length > 0 || botWasAdded) {
         await context.sendActivity(
           [
             "Hi, I’m Axon AI for Teams 👋",
             "",
             "I can help you plan your day from Jira / Monday tasks, keep org Jira in sync, and (soon) summarize meeting transcripts.",
             "",
-            "Type **help** to see what I can do.",
+            "Type **help** to see commands. Try **Hi** or **Hello** to say hi.",
           ].join("\n")
         );
       }
