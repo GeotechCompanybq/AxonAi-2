@@ -153,7 +153,22 @@ async function handleMessageTurn(context: TurnContext) {
 
 export async function handleTeamsTurn(context: TurnContext) {
   try {
-    if (context.activity.type === "message") {
+    if (context.activity.type === "conversationUpdate") {
+      const membersAdded = context.activity.membersAdded || [];
+      const botId = context.activity.recipient?.id;
+      const isBotAdded = membersAdded.some((m) => m.id === botId);
+      if (isBotAdded) {
+        await context.sendActivity(
+          [
+            "Hi, I’m Axon AI for Teams 👋",
+            "",
+            "I can help you plan your day from Jira / Monday tasks, keep org Jira in sync, and (soon) summarize meeting transcripts.",
+            "",
+            "Type **help** to see what I can do.",
+          ].join("\n")
+        );
+      }
+    } else if (context.activity.type === "message") {
       await handleMessageTurn(context);
     }
   } finally {
