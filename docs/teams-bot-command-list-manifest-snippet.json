@@ -1,0 +1,19 @@
+{
+    "_comment": "Add this 'commandLists' array inside your bot object in the Teams app manifest (Developer Portal or manifest.json). This satisfies validation that the bot responds to Hello and Help listed in the manifest.",
+    "commandLists": [{
+        "scopes": ["personal", "team", "groupChat"],
+        "commands": [{
+                "title": "Hello",
+                "description": "Say hello and get started with Axon AI"
+            },
+            {
+                "title": "Help",
+                "description": "See supported commands and how to use the bot"
+            },
+            {
+                "title": "plan today",
+                "description": "Get a daily plan from your Jira and Monday tasks"
+            }
+        ]
+    }]
+}
