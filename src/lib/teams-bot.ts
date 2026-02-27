@@ -57,12 +57,34 @@ async function handleMessageTurn(context: TurnContext) {
   }
 
   // Simple command routing – stubs for deeper Axon integration.
-  if (lower.startsWith("plan today")) {
+  if (
+    lower.startsWith("plan today") ||
+    lower.includes("plan my day") ||
+    lower.includes("plan my schedule")
+  ) {
     await context.sendActivity(
       [
         "I’ll help you plan your day using your connected Jira / Monday tasks.",
         "",
         "_Framework stub_: wire this to your existing `/api/ai/plan-for-day` + `/api/jira/tasks` and `/api/monday/tasks` endpoints to generate a real plan and post it here.",
+      ].join("\n")
+    );
+    return;
+  }
+
+  if (
+    lower.includes("what's my schedule") ||
+    lower.includes("whats my schedule") ||
+    (lower.includes("schedule") && lower.includes("today"))
+  ) {
+    await context.sendActivity(
+      [
+        "Here’s how I can help with your schedule:",
+        "- Look at today’s calendar events from Microsoft / Teams.",
+        "- Combine them with your highest-priority Jira / Monday tasks.",
+        "- Suggest focused work blocks around meetings.",
+        "",
+        "_Framework stub_: have me call your calendar + tasks APIs, then return a real schedule summary here.",
       ].join("\n")
     );
     return;
