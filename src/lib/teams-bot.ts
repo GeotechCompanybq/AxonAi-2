@@ -6,6 +6,7 @@ import {
   TurnContext,
   createBotFrameworkAuthenticationFromConfiguration,
 } from "botbuilder";
+import { chat, type ChatInput } from "@/ai/flows/chat";
 import { getTeamsLink } from "@/lib/teams-link-store";
 
 const credentialsFactory = new ConfigurationServiceClientCredentialFactory({
@@ -78,6 +79,44 @@ async function ensureLinkedAxonAccount(context: TurnContext) {
   );
 
   return null;
+}
+
+async function answerWithAxonChat(context: TurnContext, userText: string) {
+  const trimmed = userText.trim();
+  if (!trimmed) {
+    await context.sendActivity(
+      "I heard you, but I didn’t get any text to respond to. Try typing a question or request."
+    );
+    return;
+  }
+
+  const systemContent =
+    "You are AxonAI, an AI assistant chatting with a user inside Microsoft Teams. " +
+    "Be concise, friendly, and work-focused. Use short paragraphs or bullets when helpful.";
+
+  const payload: ChatInput = {
+    messages: [
+      { role: "system", content: systemContent },
+      { role: "user", content: trimmed },
+    ],
+  };
+
+  try {
+    const result = await chat(payload);
+    const reply = (result.reply || "").trim();
+    if (reply) {
+      await context.sendActivity(reply);
+    } else {
+      await context.sendActivity(
+        "I wasn’t able to generate a good reply to that. Please try rephrasing your question."
+      );
+    }
+  } catch (e) {
+    console.error("Teams AxonChat error", e);
+    await context.sendActivity(
+      "Something went wrong while I was thinking about that. Please try again in a moment."
+    );
+  }
 }
 
 async function handleMessageTurn(context: TurnContext) {
@@ -220,10 +259,11 @@ async function handleMessageTurn(context: TurnContext) {
     return;
   }
 
-  // Default echo / fallback with gentle guidance.
-  await context.sendActivity(
-    `You said: "${text}".\n\nI don’t fully understand that yet — type **help** to see supported commands.`
-  );
+  // Default: full AxonChat-style reply (requires linked Axon account).
+  const link = await ensureLinkedAxonAccount(context);
+  if (!link) return;
+
+  await answerWithAxonChat(context, text);
 }
 
 export async function handleTeamsTurn(context: TurnContext) {
