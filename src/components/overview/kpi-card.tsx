@@ -2,7 +2,8 @@
 
 import * as React from "react";
 import type { LucideIcon } from "lucide-react";
-import { TrendingDown, TrendingUp } from "lucide-react";
+import { TrendingDown, TrendingUp, ChevronRight } from "lucide-react";
+import Link from "next/link";
 import { Line, LineChart, ResponsiveContainer } from "recharts";
 
 import { cn } from "@/lib/utils";
@@ -14,17 +15,18 @@ export function KpiCard({
   changePct,
   icon: Icon,
   sparkline,
+  href,
 }: {
   label: string;
   value: string;
   changePct: number;
   icon: LucideIcon;
   sparkline: Array<{ v: number }>;
+  href?: string;
 }) {
   const up = changePct >= 0;
-
-  return (
-    <Card className="relative overflow-hidden rounded-2xl border-border/50 bg-card/60 shadow-[0_14px_40px_rgba(0,0,0,0.35)]">
+  const content = (
+    <>
       {/* subtle gradient wash */}
       <div
         aria-hidden
@@ -55,8 +57,13 @@ export function KpiCard({
             </div>
           </div>
 
-          <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-muted/30 shadow-sm ring-1 ring-white/10">
-            <Icon className="h-5 w-5 text-foreground/90" />
+          <div className="flex items-center gap-2">
+            <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-muted/30 shadow-sm ring-1 ring-white/10">
+              <Icon className="h-5 w-5 text-foreground/90" />
+            </div>
+            {href && (
+              <ChevronRight className="h-4 w-4 text-muted-foreground" />
+            )}
           </div>
         </div>
 
@@ -74,6 +81,24 @@ export function KpiCard({
           </ResponsiveContainer>
         </div>
       </CardContent>
+    </>
+  );
+
+  return (
+    <Card
+      className={cn(
+        "relative overflow-hidden rounded-2xl border-border/50 bg-card/60 shadow-[0_14px_40px_rgba(0,0,0,0.35)]",
+        href &&
+          "transition-shadow hover:shadow-[0_18px_50px_rgba(0,0,0,0.4)] hover:border-primary/30"
+      )}
+    >
+      {href ? (
+        <Link href={href} className="block outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 rounded-2xl">
+          {content}
+        </Link>
+      ) : (
+        content
+      )}
     </Card>
   );
 }

@@ -11,6 +11,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
 import { DateRangePicker } from "@/components/overview/date-range-picker";
 import { KpiCard } from "@/components/overview/kpi-card";
+import { OrgTaskSummary } from "@/components/org/org-task-summary";
 import { useAuth } from "@/hooks/use-auth";
 import { useCurrentOrgId } from "@/hooks/use-current-org-id";
 import { cn } from "@/lib/utils";
@@ -192,8 +193,18 @@ export default function OrgOverviewPage() {
           <Separator className="my-6 bg-border/60" />
         </div>
 
+        {/* Org task summary strip */}
+        {orgId && (
+          <div className="px-5 md:px-8 space-y-4">
+            <h2 className="text-sm font-medium text-muted-foreground">
+              Task overview
+            </h2>
+            <OrgTaskSummary />
+          </div>
+        )}
+
         {/* KPI strip */}
-        <div className="px-5 md:px-8">
+        <div className="px-5 md:px-8 pt-6">
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
             {state.status === "ready" && metrics ? (
               <>
@@ -203,6 +214,7 @@ export default function OrgOverviewPage() {
                   changePct={metrics.ticketsClosed.changePct}
                   icon={ListChecks}
                   sparkline={[{ v: metrics.ticketsClosed.value }]}
+                  href={orgId ? `/org/tasks?orgId=${encodeURIComponent(orgId)}&status=done` : undefined}
                 />
                 <KpiCard
                   label="Utilisation Rate"

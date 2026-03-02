@@ -16,6 +16,7 @@ import {
   CalendarDays,
 } from "lucide-react";
 import { IntegrationSummary } from "@/components/overview/integration-summary";
+import { OrgTaskSummary } from "@/components/org/org-task-summary";
 
 export default async function OrgDashboardPage() {
   const features = [
@@ -70,6 +71,19 @@ export default async function OrgDashboardPage() {
 
       {/* @ts-expect-error IntegrationSummary is a client component */}
       <IntegrationSummary mode="org" />
+
+      {/* Interactive org task summary: Open | Overdue | Due soon | Completed */}
+      <Card className="border-border/50">
+        <CardHeader>
+          <CardTitle className="text-lg">Task overview</CardTitle>
+          <CardDescription>
+            Org-wide open tasks, overdue, due soon, and completed. Click a card to filter in Org Tasks.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <OrgTaskSummary />
+        </CardContent>
+      </Card>
 
       <div className="grid gap-6 md:grid-cols-2">
         {features.map((feature) => (

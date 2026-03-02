@@ -2,12 +2,17 @@
 
 import * as React from "react";
 import type { DateRange } from "react-day-picker";
-import { addDays } from "date-fns";
+import { addDays, format, formatDistanceToNow, parseISO } from "date-fns";
+import Link from "next/link";
 import {
+  AlertCircle,
+  CheckCircle2,
+  Clock,
   Download,
   Filter,
   Gauge,
   ListChecks,
+  ListTodo,
   Timer,
 } from "lucide-react";
 
@@ -24,15 +29,25 @@ import { NeededHours } from "@/components/analytics/needed-hours";
 import { ProgressPieChart } from "@/components/analytics/progress-chart";
 import { TimeUsageChart } from "@/components/analytics/time-usage-chart";
 import { IntegrationSummary } from "@/components/overview/integration-summary";
+import type { Task } from "@/types";
 
 export function OverviewPage() {
   const [range, setRange] = React.useState<DateRange | undefined>({
     from: addDays(new Date(), -13),
     to: new Date(),
   });
+  type TaskSummary = {
+    openCount: number;
+    overdueCount: number;
+    dueSoonCount: number;
+    doneCount: number;
+    totalCount: number;
+    overdueTasks: Task[];
+    dueSoonTasks: Task[];
+  };
   const [kpiState, setKpiState] = React.useState<
     | { status: "loading" }
-    | { status: "ready"; kpis: any[]; harvestConnected: boolean }
+    | { status: "ready"; kpis: any[]; harvestConnected: boolean; taskSummary: TaskSummary }
     | { status: "error"; message: string }
   >({ status: "loading" });
 
@@ -51,6 +66,7 @@ export function OverviewPage() {
           status: "ready",
           kpis: data.kpis,
           harvestConnected: data.harvestConnected,
+          taskSummary: data.taskSummary,
         });
       } catch (e) {
         if (cancelled) return;
@@ -103,48 +119,112 @@ export function OverviewPage() {
           <Separator className="my-6 bg-border/60" />
         </div>
 
-        {/* Integrations + KPI strip */}
-        <div className="px-5 md:px-8 space-y-4">
+        {/* Integrations + Task summary strip + KPI strip */}
+        <div className="px-5 md:px-8 space-y-6">
           <IntegrationSummary mode="personal" />
-          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+
+          {/* Interactive task summary: Open | Overdue | Due soon | Completed */}
+          {kpiState.status === "ready" && kpiState.taskSummary && (
+            <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+              <Link
+                href="/tasks?status=todo"
+                className="flex items-center gap-3 rounded-xl border border-border/50 bg-card/50 p-4 transition-colors hover:bg-muted/40 hover:border-primary/30 focus-visible:ring-2 focus-visible:ring-ring"
+              >
+                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-primary/15">
+                  <ListTodo className="h-5 w-5 text-primary" />
+                </div>
+                <div className="min-w-0">
+                  <p className="text-xs font-medium text-muted-foreground">
+                    Open tasks
+                  </p>
+                  <p className="text-xl font-semibold tabular-nums">
+                    {kpiState.taskSummary.openCount}
+                  </p>
+                </div>
+              </Link>
+              <Link
+                href="/tasks?overdue=1"
+                className="flex items-center gap-3 rounded-xl border border-border/50 bg-card/50 p-4 transition-colors hover:bg-destructive/10 hover:border-destructive/40 focus-visible:ring-2 focus-visible:ring-ring"
+              >
+                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-destructive/15">
+                  <AlertCircle className="h-5 w-5 text-destructive" />
+                </div>
+                <div className="min-w-0">
+                  <p className="text-xs font-medium text-muted-foreground">
+                    Overdue
+                  </p>
+                  <p className="text-xl font-semibold tabular-nums">
+                    {kpiState.taskSummary.overdueCount}
+                  </p>
+                </div>
+              </Link>
+              <Link
+                href="/tasks?dueSoon=1"
+                className="flex items-center gap-3 rounded-xl border border-border/50 bg-card/50 p-4 transition-colors hover:bg-amber-500/10 hover:border-amber-500/40 focus-visible:ring-2 focus-visible:ring-ring"
+              >
+                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-amber-500/15">
+                  <Clock className="h-5 w-5 text-amber-600 dark:text-amber-400" />
+                </div>
+                <div className="min-w-0">
+                  <p className="text-xs font-medium text-muted-foreground">
+                    Due in 7 days
+                  </p>
+                  <p className="text-xl font-semibold tabular-nums">
+                    {kpiState.taskSummary.dueSoonCount}
+                  </p>
+                </div>
+              </Link>
+              <Link
+                href="/tasks?status=done"
+                className="flex items-center gap-3 rounded-xl border border-border/50 bg-card/50 p-4 transition-colors hover:bg-emerald-500/10 hover:border-emerald-500/40 focus-visible:ring-2 focus-visible:ring-ring"
+              >
+                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-emerald-500/15">
+                  <CheckCircle2 className="h-5 w-5 text-emerald-600 dark:text-emerald-400" />
+                </div>
+                <div className="min-w-0">
+                  <p className="text-xs font-medium text-muted-foreground">
+                    Completed
+                  </p>
+                  <p className="text-xl font-semibold tabular-nums">
+                    {kpiState.taskSummary.doneCount}
+                  </p>
+                </div>
+              </Link>
+            </div>
+          )}
+
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
             {kpiState.status === "ready" ? (
-              <>
-                <KpiCard
-                  label={kpiState.kpis[0].label}
-                  value={kpiState.kpis[0].value}
-                  changePct={kpiState.kpis[0].changePct}
-                  icon={Timer}
-                  sparkline={kpiState.kpis[0].sparkline}
-                />
-                <KpiCard
-                  label={kpiState.kpis[1].label}
-                  value={kpiState.kpis[1].value}
-                  changePct={kpiState.kpis[1].changePct}
-                  icon={ListChecks}
-                  sparkline={kpiState.kpis[1].sparkline}
-                />
-                <KpiCard
-                  label={kpiState.kpis[2].label}
-                  value={kpiState.kpis[2].value}
-                  changePct={kpiState.kpis[2].changePct}
-                  icon={Gauge}
-                  sparkline={kpiState.kpis[2].sparkline}
-                />
-                <KpiCard
-                  label={kpiState.kpis[3].label}
-                  value={kpiState.kpis[3].value}
-                  changePct={kpiState.kpis[3].changePct}
-                  icon={Gauge}
-                  sparkline={kpiState.kpis[3].sparkline}
-                />
-              </>
+              kpiState.kpis.map((kpi, i) => {
+                const icon =
+                  kpi.key === "overdue"
+                    ? AlertCircle
+                    : kpi.key === "due_soon"
+                      ? Clock
+                      : kpi.key === "tasks_done"
+                        ? ListChecks
+                        : kpi.key === "tasks_open"
+                          ? ListTodo
+                          : Timer;
+                return (
+                  <KpiCard
+                    key={kpi.key}
+                    label={kpi.label}
+                    value={kpi.value}
+                    changePct={kpi.changePct}
+                    icon={icon}
+                    sparkline={kpi.sparkline}
+                    href={kpi.href}
+                  />
+                );
+              })
             ) : kpiState.status === "error" ? (
               <div className="col-span-full rounded-2xl border border-border/50 bg-card/50 p-4 text-sm text-muted-foreground">
                 {kpiState.message}
               </div>
             ) : (
-              <div className="col-span-full grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-                {Array.from({ length: 4 }).map((_, i) => (
+              <div className="col-span-full grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
+                {Array.from({ length: 6 }).map((_, i) => (
                   <div
                     key={i}
                     className="h-[150px] rounded-2xl border border-border/50 bg-card/40 animate-pulse"
@@ -153,6 +233,79 @@ export function OverviewPage() {
               </div>
             )}
           </div>
+
+          {/* Overdue & due soon task list */}
+          {kpiState.status === "ready" &&
+            kpiState.taskSummary &&
+            (kpiState.taskSummary.overdueTasks.length > 0 ||
+              kpiState.taskSummary.dueSoonTasks.length > 0) && (
+              <div className="grid gap-4 md:grid-cols-2">
+                {kpiState.taskSummary.overdueTasks.length > 0 && (
+                  <div className="rounded-xl border border-border/50 bg-card/50 p-4">
+                    <div className="mb-3 flex items-center justify-between">
+                      <h3 className="flex items-center gap-2 text-sm font-semibold text-destructive">
+                        <AlertCircle className="h-4 w-4" />
+                        Overdue ({kpiState.taskSummary.overdueTasks.length})
+                      </h3>
+                      <Button variant="ghost" size="sm" asChild>
+                        <Link href="/tasks?overdue=1">View all</Link>
+                      </Button>
+                    </div>
+                    <ul className="space-y-2">
+                      {kpiState.taskSummary.overdueTasks.slice(0, 5).map((t) => (
+                        <li key={t.id}>
+                          <Link
+                            href="/tasks"
+                            className="block rounded-lg border border-transparent px-2 py-1.5 text-sm transition-colors hover:bg-muted/50 hover:border-border"
+                          >
+                            <span className="font-medium">{t.name}</span>
+                            {t.dueDate && (
+                              <span className="ml-2 text-xs text-muted-foreground">
+                                due {format(parseISO(t.dueDate.slice(0, 10)), "MMM d")} (
+                                {formatDistanceToNow(parseISO(t.dueDate.slice(0, 10)), {
+                                  addSuffix: true,
+                                })}
+                                )
+                              </span>
+                            )}
+                          </Link>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+                {kpiState.taskSummary.dueSoonTasks.length > 0 && (
+                  <div className="rounded-xl border border-border/50 bg-card/50 p-4">
+                    <div className="mb-3 flex items-center justify-between">
+                      <h3 className="flex items-center gap-2 text-sm font-semibold text-amber-600 dark:text-amber-400">
+                        <Clock className="h-4 w-4" />
+                        Due in 7 days ({kpiState.taskSummary.dueSoonTasks.length})
+                      </h3>
+                      <Button variant="ghost" size="sm" asChild>
+                        <Link href="/tasks?dueSoon=1">View all</Link>
+                      </Button>
+                    </div>
+                    <ul className="space-y-2">
+                      {kpiState.taskSummary.dueSoonTasks.slice(0, 5).map((t) => (
+                        <li key={t.id}>
+                          <Link
+                            href="/tasks"
+                            className="block rounded-lg border border-transparent px-2 py-1.5 text-sm transition-colors hover:bg-muted/50 hover:border-border"
+                          >
+                            <span className="font-medium">{t.name}</span>
+                            {t.dueDate && (
+                              <span className="ml-2 text-xs text-muted-foreground">
+                                due {format(parseISO(t.dueDate.slice(0, 10)), "MMM d")}
+                              </span>
+                            )}
+                          </Link>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+              </div>
+            )}
         </div>
 
         {/* Charts */}

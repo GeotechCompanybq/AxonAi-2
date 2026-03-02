@@ -19,6 +19,8 @@ type Integrations = {
     accessToken?: string;
     refreshToken?: string;
     syncAllUsers?: boolean;
+    /** Optional custom JQL for org-wide filter (e.g. BQI Support Staff only) */
+    jql?: string;
   };
   harvest?: {
     syncAllUsersTimesheets?: boolean;

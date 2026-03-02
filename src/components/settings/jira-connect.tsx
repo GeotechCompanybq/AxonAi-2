@@ -316,6 +316,29 @@ export function JiraConnect() {
                 />
               </div>
 
+              <div className="space-y-2">
+                <Label htmlFor="org-jira-jql" className="text-sm font-medium">
+                  Custom JQL (optional)
+                </Label>
+                <textarea
+                  id="org-jira-jql"
+                  className="flex min-h-[80px] w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                  placeholder={'e.g. assignee in membersOf("BQI Support Staff") AND Status != Done AND Status != Cancelled AND Status != Closed ORDER BY workItemKey ASC'}
+                  value={orgJiraConfig?.jql ?? ""}
+                  onChange={(e) =>
+                    setOrgJiraConfig((prev: any) => ({
+                      ...(prev || {}),
+                      jql: e.target.value.trim() || undefined,
+                    }))
+                  }
+                  disabled={orgLoading}
+                  rows={3}
+                />
+                <p className="text-xs text-muted-foreground">
+                  When set, org sync uses this filter instead of per-user &quot;my open tasks&quot;. Tasks are assigned to org members by Jira assignee email.
+                </p>
+              </div>
+
               {orgError && (
                 <p className="text-xs text-destructive">{orgError}</p>
               )}
