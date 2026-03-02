@@ -32,10 +32,31 @@ function getTenantIdFromContext(context: TurnContext): string | null {
 }
 
 async function ensureLinkedAxonAccount(context: TurnContext) {
+  const channelId = (context.activity.channelId || "").toLowerCase();
+
+  // Integrations require a real Microsoft Teams context so we can safely
+  // identify the tenant and user. For other channels (like Web Chat), we
+  // explicitly tell the user what to do instead of failing silently.
+  if (channelId !== "msteams") {
+    await context.sendActivity(
+      [
+        "This command is only available when you use AxonAI inside Microsoft Teams.",
+        "",
+        "Install the AxonAI app in Teams and run this command there so I can safely use your Jira, Monday, Harvest, and calendar integrations.",
+      ].join("\n")
+    );
+    return null;
+  }
+
   const teamsUserId = context.activity.from?.id || "";
   const tenantId = getTenantIdFromContext(context);
 
-  if (!teamsUserId || !tenantId) return null;
+  if (!teamsUserId || !tenantId) {
+    await context.sendActivity(
+      "I couldn’t read your Teams tenant information. Please try again in a Teams chat or ask your admin to re-install the AxonAI app."
+    );
+    return null;
+  }
 
   const existing = await getTeamsLink({ tenantId, teamsUserId });
   if (existing) return existing;
