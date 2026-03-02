@@ -1,10 +1,29 @@
 "use client";
 
-import { differenceInCalendarDays, format, subDays } from "date-fns";
+import { addDays, differenceInCalendarDays, format, isBefore, parseISO, subDays } from "date-fns";
 import type { DateRange } from "react-day-picker";
 
 import { getTasksFromLocalStorage } from "@/lib/task-storage";
 import type { Task } from "@/types";
+
+const TODAY = format(new Date(), "yyyy-MM-dd");
+
+function isOverdue(task: Task): boolean {
+  if (task.status === "done") return false;
+  const d = task.dueDate ? String(task.dueDate).slice(0, 10) : "";
+  return d !== "" && d < TODAY;
+}
+
+function isDueSoon(task: Task, withinDays: number): boolean {
+  if (task.status === "done") return false;
+  const d = task.dueDate ? String(task.dueDate).slice(0, 10) : "";
+  if (!d || d < TODAY) return false;
+  const due = parseISO(d);
+  const today = new Date(TODAY);
+  const limit = addDays(today, withinDays);
+  return !isBefore(due, today) && (isBefore(due, limit) || format(due, "yyyy-MM-dd") === format(limit, "yyyy-MM-dd"));
+}
+
 
 type SparkPoint = { v: number };
 
@@ -100,6 +119,10 @@ export async function buildOverviewKpis(range: DateRange | undefined) {
   const totalTasks = tasks.length;
   const doneTasks = tasks.filter((t) => t.status === "done").length;
   const openTasks = tasks.filter((t) => t.status !== "done").length;
+  const overdueTasks = tasks.filter(isOverdue);
+  const dueSoonTasks = tasks.filter((t) => isDueSoon(t, 7));
+  const overdueCount = overdueTasks.length;
+  const dueSoonCount = dueSoonTasks.length;
   const completionRate = totalTasks > 0 ? (doneTasks / totalTasks) * 100 : 0;
 
   // Harvest hours (may not be connected)
@@ -179,6 +202,15 @@ export async function buildOverviewKpis(range: DateRange | undefined) {
 
   return {
     harvestConnected,
+    taskSummary: {
+      openCount: openTasks,
+      overdueCount,
+      dueSoonCount,
+      doneCount: doneTasks,
+      totalCount: totalTasks,
+      overdueTasks: overdueTasks.slice(0, 10),
+      dueSoonTasks: dueSoonTasks.slice(0, 10),
+    },
     kpis: [
       {
         key: "hours",
@@ -186,6 +218,7 @@ export async function buildOverviewKpis(range: DateRange | undefined) {
         value: harvestConnected ? `${hours.toFixed(1)}h` : "Not connected",
         changePct: harvestConnected ? changeHours : 0,
         sparkline: sparkHours,
+        href: "/analytics",
       },
       {
         key: "tasks_done",
@@ -193,13 +226,15 @@ export async function buildOverviewKpis(range: DateRange | undefined) {
         value: nfmt(doneTasks),
         changePct: changeDone,
         sparkline: sparkDone,
+        href: "/tasks?status=done",
       },
       {
         key: "tasks_open",
         label: "Open Tasks",
         value: nfmt(openTasks),
         changePct: changeOpen,
-        sparkline: sparkDone.map((p) => ({ v: Math.max(0, openTasks - p.v) })), // simple shape
+        sparkline: sparkDone.map((p) => ({ v: Math.max(0, openTasks - p.v) })),
+        href: "/tasks?status=todo",
       },
       {
         key: "completion_rate",
@@ -212,6 +247,23 @@ export async function buildOverviewKpis(range: DateRange | undefined) {
               ? Math.round(((p.v / Math.max(1, totalTasks)) * 100 + i * 0.2) * 10) / 10
               : 0,
         })),
+        href: "/tasks",
+      },
+      {
+        key: "overdue",
+        label: "Overdue",
+        value: nfmt(overdueCount),
+        changePct: 0,
+        sparkline: days.map(() => ({ v: overdueCount })),
+        href: "/tasks?overdue=1",
+      },
+      {
+        key: "due_soon",
+        label: "Due Soon (7d)",
+        value: nfmt(dueSoonCount),
+        changePct: 0,
+        sparkline: days.map(() => ({ v: dueSoonCount })),
+        href: "/tasks?dueSoon=1",
       },
     ],
   };

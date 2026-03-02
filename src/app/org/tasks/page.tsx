@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
+import { addDays, format, parseISO } from "date-fns";
 import { useCurrentOrgId } from "@/hooks/use-current-org-id";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
@@ -15,6 +16,23 @@ import {
 import { IconSpinner } from "@/components/icons";
 import type { Task } from "@/types";
 
+const TODAY = format(new Date(), "yyyy-MM-dd");
+
+function isOverdue(task: Task): boolean {
+  if (task.status === "done") return false;
+  const d = task.dueDate ? String(task.dueDate).slice(0, 10) : "";
+  return d !== "" && d < TODAY;
+}
+
+function isDueSoon(task: Task, withinDays: number): boolean {
+  if (task.status === "done") return false;
+  const d = task.dueDate ? String(task.dueDate).slice(0, 10) : "";
+  if (!d || d < TODAY) return false;
+  const due = parseISO(d);
+  const limit = addDays(new Date(), withinDays);
+  return format(due, "yyyy-MM-dd") <= format(limit, "yyyy-MM-dd");
+}
+
 export default function OrgTasksPage() {
   const { orgId: storedOrgId } = useCurrentOrgId();
   const searchParams = useSearchParams();
@@ -23,6 +41,9 @@ export default function OrgTasksPage() {
     () => orgIdFromQuery || storedOrgId,
     [orgIdFromQuery, storedOrgId]
   );
+  const statusParam = searchParams?.get("status") ?? null;
+  const overdueParam = searchParams?.get("overdue") === "1";
+  const dueSoonParam = searchParams?.get("dueSoon") === "1";
 
   const [tasks, setTasks] = useState<Task[] | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -48,11 +69,30 @@ export default function OrgTasksPage() {
     };
   }, [orgId]);
 
+  const filteredTasks = useMemo(() => {
+    if (!tasks) return null;
+    return tasks.filter((t) => {
+      const matchStatus =
+        !statusParam || t.status === statusParam;
+      const matchOverdue = !overdueParam || isOverdue(t);
+      const matchDueSoon = !dueSoonParam || isDueSoon(t, 7);
+      return matchStatus && matchOverdue && matchDueSoon;
+    });
+  }, [tasks, statusParam, overdueParam, dueSoonParam]);
+
+  const filterLabel = useMemo(() => {
+    const parts: string[] = [];
+    if (statusParam) parts.push(`status: ${statusParam}`);
+    if (overdueParam) parts.push("overdue");
+    if (dueSoonParam) parts.push("due in 7 days");
+    return parts.length ? ` (${parts.join(", ")})` : "";
+  }, [statusParam, overdueParam, dueSoonParam]);
+
   return (
     <div className="max-w-6xl mx-auto">
       <Card>
         <CardHeader>
-          <CardTitle>All Organization Tasks</CardTitle>
+          <CardTitle>Organization Tasks{filterLabel}</CardTitle>
         </CardHeader>
         <CardContent>
           {!orgId && (
@@ -66,10 +106,12 @@ export default function OrgTasksPage() {
             </div>
           )}
           {error && <div className="text-sm text-red-500">{error}</div>}
-          {orgId && tasks && tasks.length === 0 && !error && (
-            <div className="text-sm text-muted-foreground">No tasks found.</div>
+          {orgId && filteredTasks && filteredTasks.length === 0 && !error && (
+            <div className="text-sm text-muted-foreground">
+              No tasks found{filterLabel ? " for this filter" : ""}.
+            </div>
           )}
-          {orgId && tasks && tasks.length > 0 && !error && (
+          {orgId && filteredTasks && filteredTasks.length > 0 && !error && (
             <Table>
               <TableHeader>
                 <TableRow>
@@ -81,14 +123,14 @@ export default function OrgTasksPage() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {tasks.map((t: any) => (
+                {filteredTasks.map((t: any) => (
                   <TableRow key={t.id}>
                     <TableCell className="font-medium">
                       {t.name || t.id}
                     </TableCell>
                     <TableCell>{t.status || "-"}</TableCell>
                     <TableCell>{t.priority || "-"}</TableCell>
-                    <TableCell>{t.teamId || "-"}</TableCell>
+                    <TableCell>{t.teamId || t.uid || "-"}</TableCell>
                     <TableCell>
                       {t.dueDate
                         ? new Date(t.dueDate).toLocaleDateString()

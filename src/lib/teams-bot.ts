@@ -6,6 +6,7 @@ import {
   TurnContext,
   createBotFrameworkAuthenticationFromConfiguration,
 } from "botbuilder";
+import { getTeamsLink } from "@/lib/teams-link-store";
 
 const credentialsFactory = new ConfigurationServiceClientCredentialFactory({
   MicrosoftAppId: process.env.MICROSOFT_BOT_APP_ID ?? "",
@@ -21,6 +22,42 @@ export const teamsBotAdapter = new CloudAdapter(botFrameworkAuthentication);
 
 const memoryStorage = new MemoryStorage();
 const conversationState = new ConversationState(memoryStorage);
+
+function getTenantIdFromContext(context: TurnContext): string | null {
+  const channelData = (context.activity.channelData || {}) as any;
+  const fromChannelData = channelData?.tenant?.id as string | undefined;
+  const fromConversation = (context.activity.conversation as any)
+    ?.tenantId as string | undefined;
+  return (fromChannelData || fromConversation || "").trim() || null;
+}
+
+async function ensureLinkedAxonAccount(context: TurnContext) {
+  const teamsUserId = context.activity.from?.id || "";
+  const tenantId = getTenantIdFromContext(context);
+
+  if (!teamsUserId || !tenantId) return null;
+
+  const existing = await getTeamsLink({ tenantId, teamsUserId });
+  if (existing) return existing;
+
+  const baseUrl =
+    process.env.APP_BASE_URL?.trim() || "https://axonai.bqitech.com";
+  const linkUrl = `${baseUrl}/teams/link?tenantId=${encodeURIComponent(
+    tenantId
+  )}&userId=${encodeURIComponent(teamsUserId)}`;
+
+  await context.sendActivity(
+    [
+      "I need to be linked to your Axon account before I can access your Jira, Monday, Harvest, and calendar data.",
+      "",
+      `Open this link in your browser while signed into Axon to complete the link:`,
+      "",
+      linkUrl,
+    ].join("\n")
+  );
+
+  return null;
+}
 
 async function handleMessageTurn(context: TurnContext) {
   const raw = (context.activity.text || "").replace(/[\u200B-\u200D\uFEFF]/g, "");
@@ -68,6 +105,9 @@ async function handleMessageTurn(context: TurnContext) {
     lower.includes("plan my day") ||
     lower.includes("plan my schedule")
   ) {
+    const link = await ensureLinkedAxonAccount(context);
+    if (!link) return;
+
     await context.sendActivity(
       [
         "I’ll help you plan your day using your connected Jira / Monday tasks.",
@@ -83,6 +123,9 @@ async function handleMessageTurn(context: TurnContext) {
     lower.includes("whats my schedule") ||
     (lower.includes("schedule") && lower.includes("today"))
   ) {
+    const link = await ensureLinkedAxonAccount(context);
+    if (!link) return;
+
     await context.sendActivity(
       [
         "Here’s how I can help with your schedule:",
@@ -97,6 +140,9 @@ async function handleMessageTurn(context: TurnContext) {
   }
 
   if (lower.startsWith("sync org jira")) {
+    const link = await ensureLinkedAxonAccount(context);
+    if (!link) return;
+
     await context.sendActivity(
       [
         "Org-wide Jira sync keeps your Axon analytics and Org Tasks up to date.",
@@ -108,6 +154,9 @@ async function handleMessageTurn(context: TurnContext) {
   }
 
   if (lower.startsWith("summarize last meeting")) {
+    const link = await ensureLinkedAxonAccount(context);
+    if (!link) return;
+
     await context.sendActivity(
       [
         "I can summarize your latest Loom / Teams meeting transcript and share key action items.",

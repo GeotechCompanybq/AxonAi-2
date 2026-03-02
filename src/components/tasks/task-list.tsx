@@ -1,6 +1,8 @@
 "use client";
 
 import { useState, useEffect, useMemo } from "react";
+import { useSearchParams } from "next/navigation";
+import { addDays, format, parseISO } from "date-fns";
 import type { Task, TaskStatus } from "@/types";
 import { TaskItem } from "./task-item";
 import { Button } from "@/components/ui/button";
@@ -49,15 +51,51 @@ const fallbackInitialTasks: Task[] = [
   },
 ];
 
+const TODAY = format(new Date(), "yyyy-MM-dd");
+
+function isOverdue(task: Task): boolean {
+  if (task.status === "done") return false;
+  const d = task.dueDate ? String(task.dueDate).slice(0, 10) : "";
+  return d !== "" && d < TODAY;
+}
+
+function isDueSoon(task: Task, withinDays: number): boolean {
+  if (task.status === "done") return false;
+  const d = task.dueDate ? String(task.dueDate).slice(0, 10) : "";
+  if (!d || d < TODAY) return false;
+  const due = parseISO(d);
+  const limit = addDays(new Date(), withinDays);
+  return format(due, "yyyy-MM-dd") <= format(limit, "yyyy-MM-dd");
+}
+
 export function TaskList(props: TaskListProps = {}) {
   const { sourceFilter, hideCreate } = props;
+  const searchParams = useSearchParams();
+  const statusParam = searchParams.get("status") as TaskStatus | null;
+  const overdueParam = searchParams.get("overdue") === "1";
+  const dueSoonParam = searchParams.get("dueSoon") === "1";
+
   const [tasks, setTasks] = useState<Task[]>([]);
   const [isLoaded, setIsLoaded] = useState(false); // To prevent flicker with localStorage
   const [searchTerm, setSearchTerm] = useState("");
-  const [statusFilter, setStatusFilter] = useState<TaskStatus | "all">("all");
+  const [statusFilter, setStatusFilter] = useState<TaskStatus | "all">(
+    statusParam && ["todo", "inprogress", "done", "blocked"].includes(statusParam)
+      ? statusParam
+      : "all"
+  );
   const [priorityFilter, setPriorityFilter] = useState<
     "all" | "low" | "medium" | "high"
   >("all");
+  const [urlOverdue, setUrlOverdue] = useState(overdueParam);
+  const [urlDueSoon, setUrlDueSoon] = useState(dueSoonParam);
+
+  useEffect(() => {
+    setUrlOverdue(overdueParam);
+    setUrlDueSoon(dueSoonParam);
+    if (statusParam && ["todo", "inprogress", "done", "blocked"].includes(statusParam)) {
+      setStatusFilter(statusParam);
+    }
+  }, [statusParam, overdueParam, dueSoonParam]);
 
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingTask, setEditingTask] = useState<Task | null>(null);
@@ -271,7 +309,15 @@ export function TaskList(props: TaskListProps = {}) {
         statusFilter === "all" || task.status === statusFilter;
       const matchesPriority =
         priorityFilter === "all" || task.priority === priorityFilter;
-      return matchesSearchTerm && matchesStatus && matchesPriority;
+      const matchesOverdue = !urlOverdue || isOverdue(task);
+      const matchesDueSoon = !urlDueSoon || isDueSoon(task, 7);
+      return (
+        matchesSearchTerm &&
+        matchesStatus &&
+        matchesPriority &&
+        matchesOverdue &&
+        matchesDueSoon
+      );
     })
     // Sort with 'inprogress' first, then 'todo', then 'blocked', then 'done'.
     .sort((a, b) => {
