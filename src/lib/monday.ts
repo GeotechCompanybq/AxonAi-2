@@ -216,7 +216,7 @@ export async function fetchMondayTasks(token: string) {
       );
     });
     let comments: string[] = [];
-    const allowUpdates = /^(1|true|yes)$/i.test(process.env.MONDAY_READ_UPDATES || "");
+    const allowUpdates = appConfig.mondayReadUpdates;
     if (allowUpdates) {
       try {
         comments = await fetchAllUpdates(String(it.id));

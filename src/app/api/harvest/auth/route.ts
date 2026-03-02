@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { appConfig } from "@/lib/config";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -6,10 +7,10 @@ export const dynamic = "force-dynamic";
 export async function GET(req: NextRequest) {
   const clientId = process.env.HARVEST_CLIENT_ID;
   const computedRedirectUri = new URL(
-    "/api/harvest/callback",
+    appConfig.harvestRedirectPath,
     req.nextUrl.origin
   ).toString();
-  const redirectUri = process.env.HARVEST_REDIRECT_URI || computedRedirectUri;
+  const redirectUri = computedRedirectUri;
   const uid = req.nextUrl.searchParams.get("uid") || undefined;
   const returnTo = req.nextUrl.searchParams.get("returnTo") || undefined;
   // Optional connection slot, e.g. "alt" for comparison org

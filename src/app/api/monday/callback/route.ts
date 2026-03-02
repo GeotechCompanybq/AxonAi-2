@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { cookies } from "next/headers";
 import { getDb, getCollectionNames } from "@/lib/mongo";
+import { appConfig } from "@/lib/config";
 
 export async function GET(req: NextRequest) {
   try {
@@ -25,10 +26,10 @@ export async function GET(req: NextRequest) {
     const clientId = process.env.MONDAY_CLIENT_ID!;
     const clientSecret = process.env.MONDAY_CLIENT_SECRET!;
     const computedRedirectUri = new URL(
-      "/api/monday/callback",
+      appConfig.mondayRedirectPath,
       req.nextUrl.origin
     ).toString();
-    const redirectUri = process.env.MONDAY_REDIRECT_URI || computedRedirectUri;
+    const redirectUri = computedRedirectUri;
 
     const params = new URLSearchParams();
     params.set("code", code);
