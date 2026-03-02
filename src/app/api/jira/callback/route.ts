@@ -1,14 +1,16 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getDb, getCollectionNames } from "@/lib/mongo";
+import { appConfig } from "@/lib/config";
 
 export async function GET(req: NextRequest) {
   try {
     const { searchParams } = new URL(req.url);
     const code = searchParams.get("code");
     const state = searchParams.get("state") || undefined;
-    const redirectUri =
-      process.env.JIRA_REDIRECT_URI ||
-      new URL("/api/jira/callback", req.nextUrl.origin).toString();
+    const redirectUri = new URL(
+      appConfig.jiraRedirectPath,
+      req.nextUrl.origin
+    ).toString();
 
     // Extract user ID from state if provided
     const uid = state?.startsWith("uid:") ? state.slice(4) : undefined;

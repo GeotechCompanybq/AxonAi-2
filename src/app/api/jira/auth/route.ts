@@ -1,10 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
+import { appConfig } from "@/lib/config";
 
 export async function GET(req: NextRequest) {
   const clientId = process.env.JIRA_CLIENT_ID;
-  const redirectUri =
-    process.env.JIRA_REDIRECT_URI ||
-    new URL("/api/jira/callback", req.nextUrl.origin).toString();
+  const redirectUri = new URL(
+    appConfig.jiraRedirectPath,
+    req.nextUrl.origin
+  ).toString();
 
   // Optional: capture user ID for token storage
   const uid = req.nextUrl.searchParams.get("uid") || undefined;

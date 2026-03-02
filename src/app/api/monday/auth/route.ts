@@ -1,13 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
+import { appConfig } from "@/lib/config";
 
 export async function GET(req: NextRequest) {
   const clientId = process.env.MONDAY_CLIENT_ID;
   const computedRedirectUri = new URL(
-    "/api/monday/callback",
+    appConfig.mondayRedirectPath,
     req.nextUrl.origin
   ).toString();
-  const redirectUri = process.env.MONDAY_REDIRECT_URI || computedRedirectUri;
-  const scope = process.env.MONDAY_SCOPES || "me:read boards:read users:read";
+  const redirectUri = computedRedirectUri;
+  const scope = appConfig.mondayScopes;
   const uid = req.nextUrl.searchParams.get("uid") || undefined;
   const returnTo = req.nextUrl.searchParams.get("returnTo") || undefined;
   const stateParts = [

@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { appConfig } from "@/lib/config";
 import { cookies } from "next/headers";
 
 export const runtime = "nodejs";
@@ -32,9 +33,10 @@ export async function GET(req: NextRequest) {
 
     const clientId = process.env.HARVEST_CLIENT_ID;
     const clientSecret = process.env.HARVEST_CLIENT_SECRET;
-    const redirectUri =
-      process.env.HARVEST_REDIRECT_URI ||
-      new URL("/api/harvest/callback", req.nextUrl.origin).toString();
+    const redirectUri = new URL(
+      appConfig.harvestRedirectPath,
+      req.nextUrl.origin
+    ).toString();
 
     if (!clientId || !clientSecret) {
       console.error("Harvest callback missing env", {
